@@ -1,13 +1,14 @@
+// src/components/sheet/SheetGrid.tsx
 "use client";
 
 import React from "react";
 import { CellBlock, ColumnBlock, RowBlock } from "@/lib/types";
 
 interface SheetGridProps {
-  columns: ColumnBlock[];
+  columns: ColumnBlock[]; // Expect pre-sorted columns
   rows: RowBlock[];
-  cells: CellBlock[][]; // Assuming cells are pre-organized into a 2D array [rowIndex][colIndex]
-  highlightedCell?: string | null; // blockId of the cell to highlight
+  cells: CellBlock[][]; // Expect 2D array matching rows and sorted columns
+  highlightedCell?: string | null;
 }
 
 export const SheetGrid: React.FC<SheetGridProps> = ({
@@ -16,30 +17,26 @@ export const SheetGrid: React.FC<SheetGridProps> = ({
   cells,
   highlightedCell
 }) => {
+  // console.log("SheetGrid rendering, highlightedCell:", highlightedCell); // Keep for debugging
+
   if (!columns.length || !rows.length) {
-    return <p>No data to display.</p>;
+    return <p className='p-4 text-gray-500'>No data to display.</p>;
   }
 
-  // Sort columns by position if not already sorted
-  const sortedColumns = [...columns].sort(
-    (a, b) => (a.properties?.position ?? 0) - (b.properties?.position ?? 0)
-  );
-
   return (
-    <div className='overflow-x-auto'>
-      <table className='min-w-full divide-y divide-gray-200 border'>
-        <thead className='bg-gray-50'>
+    <div className='overflow-auto h-full'>
+      <table className='min-w-full divide-y divide-gray-200 border border-collapse'>
+        <thead className='bg-gray-100 sticky top-0 z-10'>
           <tr>
-            {/* Add a placeholder for row headers/names if needed */}
-            <th className='px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r'>
+            <th className='sticky left-0 bg-gray-100 px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase tracking-wider border-r border-b z-20'>
               Row
             </th>
-            {sortedColumns.map((col) => (
+            {columns.map((col) => (
               <th
                 key={col.id}
                 scope='col'
-                className='px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider border-r'
-                style={{ minWidth: col.properties?.width || 150 }} // Apply width
+                className='px-3 py-2 text-left text-xs font-medium text-gray-600 uppercase tracking-wider border-r border-b whitespace-nowrap'
+                style={{ minWidth: col.properties?.width || 150 }}
               >
                 {col.properties?.name || col.id}
               </th>
@@ -48,32 +45,32 @@ export const SheetGrid: React.FC<SheetGridProps> = ({
         </thead>
         <tbody className='bg-white divide-y divide-gray-200'>
           {rows.map((row, rowIndex) => (
-            <tr key={row.id}>
-              {/* Row header cell */}
-              <td className='px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-900 border-r'>
-                {row.properties?.name || `Row ${rowIndex + 1}`}
+            <tr key={row.id} className='hover:bg-gray-50'>
+              <td className='sticky left-0 bg-white px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-700 border-r border-b z-10'>
+                {row.properties?.name || `${rowIndex + 1}`}
               </td>
-              {sortedColumns.map((col, colIndex) => {
-                // Find the correct cell based on rowId and columnId
-                // This assumes the `cells` prop is structured correctly.
-                // A more robust way might be to pass a Map<rowId, Map<colId, CellBlock>>
-                const cell = cells[rowIndex]?.find(
-                  (c) => c.properties?.column?.id === col.id
-                );
+              {columns.map((col, colIndex) => {
+                const cell = cells[rowIndex]?.[colIndex];
                 const cellId = cell?.id;
-                const isHighlighted = cellId === highlightedCell;
+                const isHighlighted =
+                  !!cellId && !!highlightedCell && cellId === highlightedCell;
+
+                // console.log(`Row ${rowIndex}, Col ${colIndex}, Cell ID: ${cellId}, Highlighted: ${isHighlighted}`); // Keep for debugging
 
                 return (
                   <td
                     key={`${row.id}-${col.id}`}
-                    className={`px-3 py-2 whitespace-normal text-sm text-gray-700 border-r ${
+                    id={cellId ? `cell-${cellId}` : undefined}
+                    // Apply purple background if highlighted
+                    className={`px-3 py-2 text-sm text-gray-800 border-r border-b align-top whitespace-normal transition-colors duration-200 ease-in-out ${
+                      // Reduced duration slightly
                       isHighlighted
-                        ? "bg-yellow-200 ring-2 ring-yellow-400"
-                        : ""
-                    } transition-colors duration-300`}
-                    id={`cell-${cellId}`} // Add ID for potential scrolling
+                        ? "bg-purple-200" // Use desired purple background shade
+                        : // Optional: Add a ring for more emphasis if needed
+                          // ? "bg-purple-200 ring-2 ring-purple-400 ring-inset"
+                          "" // No extra classes if not highlighted
+                    }`}
                   >
-                    {/* Render cell value - handle different types if necessary */}
                     {cell?.properties?.value?.toString() ?? ""}
                   </td>
                 );

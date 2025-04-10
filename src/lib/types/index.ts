@@ -26,13 +26,16 @@ export interface SheetBlock extends Block {
   type: BlockTypeEnum.SHEET;
   properties: {
     title: string;
+    rowCount?: number | string; // Added for displaying row count on card
   };
   content: string[]; // Array of row IDs
 }
 
 export interface RowBlock extends Block {
   type: BlockTypeEnum.ROW;
-  // properties might hold row-specific metadata if needed
+  properties: {
+    name?: string; // Optional: Row name/identifier
+  };
 }
 
 export interface ColumnBlock extends Block {

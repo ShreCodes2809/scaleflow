@@ -6,7 +6,8 @@ import {
   BlockTypeEnum,
   CellBlock,
   ColumnBlock,
-  RowBlock
+  RowBlock,
+  SheetBlock // Import SheetBlock
 } from "@/lib/types";
 import { Database } from "@/lib/types/supabase"; // Generated types
 
@@ -81,7 +82,15 @@ export class BlockService {
       console.error(`Error updating properties for block ${id}:`, error);
       throw error;
     }
-    return data?.[0] || null;
+    // The RPC returns an array, we expect a single block or null
+    const result = data?.[0] || null;
+
+    // Fetch the block again to ensure we return the full, updated object
+    // as the RPC might only return specific fields depending on its definition
+    if (result && result.id) {
+      return this.getBlock(result.id);
+    }
+    return null; // Return null if the RPC didn't return a valid block ID
   }
 
   // --- getCellByColumnAndRow, getColumnsBySheetId remain the same ---
@@ -132,8 +141,6 @@ export class BlockService {
       .eq("parent_id", sheetId)
       .eq("type", BlockTypeEnum.ROW)
       .is("deleted_at", null);
-
-    // console.log("data in getRowsBySheetId", data); // Keep for debugging if needed
 
     if (error) {
       console.error(`Error fetching rows for sheet ${sheetId}:`, error);
@@ -223,6 +230,8 @@ export class BlockService {
 
       // Add each column name as a separate condition
       params.columnIds.forEach((columnName) => {
+        // Ensure columnName is properly escaped if it contains special characters
+        // For simplicity, assuming basic names here. Use proper escaping if needed.
         orConditions.push(`properties->column->>name.eq.${columnName}`);
       });
     }
@@ -233,7 +242,9 @@ export class BlockService {
 
       // Add each keyword as a separate condition
       params.contentKeywords.forEach((kw) => {
-        orConditions.push(`properties->>value.ilike.%${kw}%`);
+        // Escape keyword for ILIKE if necessary
+        const escapedKw = kw.replace(/%/g, "\\%").replace(/_/g, "\\_");
+        orConditions.push(`properties->>value.ilike.%${escapedKw}%`);
       });
     }
 
@@ -285,37 +296,65 @@ export class BlockService {
         "2. Column names might not match - expected:",
         params.columnIds
       );
-
-      // To help debug, let's fetch a sample cell to see its structure
-      try {
-        const sampleCell = await this.supabase
-          .from("blocks")
-          .select("*")
-          .eq("type", BlockTypeEnum.CELL)
-          .is("deleted_at", null)
-          .in("parent_id", actualRowIdsToFilter.slice(0, 1))
-          .limit(1)
-          .single();
-
-        if (sampleCell.data) {
-          console.log("Sample cell structure for debugging:", {
-            id: sampleCell.data.id,
-            parent_id: sampleCell.data.parent_id,
-            properties: sampleCell.data.properties
-          });
-          console.log(
-            "Column structure in sample cell:",
-            sampleCell.data.properties
-          );
-        } else {
-          console.log("No sample cell found to examine structure");
-        }
-      } catch (e) {
-        console.log("Error fetching sample cell:", e);
-      }
+      console.log(
+        "3. Row IDs might not match - expected:",
+        actualRowIdsToFilter
+      );
     }
 
     return (data || []) as CellBlock[];
+  }
+
+  // *** NEW Method: Get all sheets with row counts ***
+  async getAllSheetsWithRowCount(
+    organizationId: string
+  ): Promise<SheetBlock[]> {
+    // 1. Fetch all SHEETS for the organization
+    const { data: sheetsData, error: sheetsError } = await this.supabase
+      .from("blocks")
+      .select("*")
+      .eq("organization_id", organizationId)
+      .eq("type", BlockTypeEnum.SHEET)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: false });
+
+    if (sheetsError) {
+      console.error(
+        `Error fetching sheets for org ${organizationId}:`,
+        sheetsError
+      );
+      throw sheetsError;
+    }
+
+    if (!sheetsData) {
+      return [];
+    }
+
+    // 2. For each sheet, fetch its row count
+    const sheetsWithRowCount = await Promise.all(
+      sheetsData.map(async (sheet) => {
+        const { count, error: countError } = await this.supabase
+          .from("blocks")
+          .select("id", { count: "exact", head: true }) // Efficiently count
+          .eq("parent_id", sheet.id)
+          .eq("type", BlockTypeEnum.ROW)
+          .is("deleted_at", null);
+
+        if (countError) {
+          console.error(
+            `Error fetching row count for sheet ${sheet.id}:`,
+            countError
+          );
+          // Assign a default or indicator if count fails
+          (sheet.properties as any).rowCount = "N/A";
+        } else {
+          (sheet.properties as any).rowCount = count ?? 0;
+        }
+        return sheet;
+      })
+    );
+
+    return sheetsWithRowCount as unknown as SheetBlock[];
   }
 
   // Add other methods like softDeleteBlock, updateCell etc. adapting from the reference if needed
