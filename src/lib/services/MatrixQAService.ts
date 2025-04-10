@@ -12,6 +12,11 @@ import {
   BlockTypeEnum
 } from "@/lib/types";
 import { v4 as uuidv4 } from "uuid";
+import { ChatOpenAI } from "@langchain/openai";
+import { LangChainStream } from "ai";
+import { PromptTemplate } from "@langchain/core/prompts";
+import { StringOutputParser } from "@langchain/core/output_parsers";
+import { RunnableSequence } from "@langchain/core/runnables";
 
 // Enhanced conversation history structure
 interface ConversationState {
@@ -50,8 +55,9 @@ export class MatrixQAService {
     this.synthesisAgent = new SynthesisAgent();
   }
 
+  // Original method for non-streaming responses
   async processQuery(request: MatrixQARequest): Promise<MatrixQAResponse> {
-    const { query, sheetId } = request;
+    const { sheetId } = request;
     const conversationId = request.conversationId || uuidv4();
 
     // Initialize or retrieve conversation state
@@ -167,7 +173,7 @@ export class MatrixQAService {
       // 2. Reasoning Agent: Plan Retrieval with enhanced schema awareness
       steps.push("Planning retrieval with schema awareness...");
       const { plan, thoughts } = await this.reasoningAgent.planRetrieval(
-        query,
+        request.messages[request.messages.length - 1].content,
         sheetContext,
         history
       );
@@ -204,7 +210,7 @@ export class MatrixQAService {
         // For the feedback loop, we'd need to update SynthesisAgent to support this
         // For now, we'll simulate it here
         const synthesisResult = await this.synthesizeWithFeedbackWrapper(
-          query,
+          request.messages[request.messages.length - 1].content,
           evidence,
           history,
           schemaInfo
@@ -238,7 +244,7 @@ export class MatrixQAService {
       // If we went through the feedback loop but didn't get an answer, use the last synthesis attempt
       if (!finalAnswer && evidence.length > 0) {
         finalAnswer = await this.synthesisAgent.synthesizeAnswer(
-          query,
+          request.messages[request.messages.length - 1].content,
           evidence,
           history
         );
@@ -252,9 +258,13 @@ export class MatrixQAService {
       }
 
       // 5. Update Conversation History
-      history.push({ role: "user", content: query });
+      history.push({
+        role: "user",
+        content: request.messages[request.messages.length - 1].content
+      });
       history.push({ role: "assistant", content: finalAnswer });
-      conversationState.lastQuery = query;
+      conversationState.lastQuery =
+        request.messages[request.messages.length - 1].content;
       conversationState.lastAnswer = finalAnswer;
       conversationStore[conversationId] = conversationState;
 
@@ -275,6 +285,343 @@ export class MatrixQAService {
         citations: [],
         conversationId,
         steps: [...steps, `Error: ${error.message}`]
+      };
+    }
+  }
+
+  // New method for streaming responses using Langchain and Vercel AI SDK
+  async processStreamingQuery(
+    request: MatrixQARequest
+  ): Promise<{ stream: ReadableStream<any>; metadata: any }> {
+    const { messages, sheetId } = request;
+    const conversationId = request.conversationId || uuidv4();
+    const steps: string[] = [];
+
+    // Initialize or retrieve conversation state
+    if (!conversationStore[conversationId]) {
+      conversationStore[conversationId] = { messages: [] };
+    }
+    const conversationState = conversationStore[conversationId];
+    const history = conversationState.messages;
+
+    try {
+      // Setup the LangChain streaming
+      const { stream, handlers } = LangChainStream();
+
+      // Run the processing in the background to allow streaming
+      (async () => {
+        try {
+          steps.push("Analyzing table structure...");
+          // 1. Enhanced Schema Analysis (same as before)
+          const columns = await this.blockService.getColumnsBySheetId(sheetId);
+          const rows = await this.blockService.getRowsBySheetId(sheetId);
+
+          if (rows.length === 0) {
+            throw new Error("Sheet contains no rows. Cannot process query.");
+          }
+
+          // Reuse schema if we already analyzed it in this conversation
+          let schemaInfo: SchemaInfo;
+          if (conversationState.schema) {
+            schemaInfo = conversationState.schema;
+            steps.push(
+              "Using previously analyzed schema from conversation history."
+            );
+          } else {
+            // Sample a few rows to understand data types and relationships
+            const sampleSize = Math.min(5, rows.length);
+            const sampleRows = rows.slice(0, sampleSize);
+
+            schemaInfo = {
+              columnTypes: {},
+              primaryKeyCandidate: null,
+              valueColumns: []
+            };
+
+            steps.push(`Analyzing schema using ${sampleSize} sample rows...`);
+
+            // For each column, examine sample values to infer type and role
+            for (const column of columns) {
+              const columnName = column.properties?.name || column.id;
+              const sampleValues = [];
+
+              // Get sample values for this column
+              for (const row of sampleRows) {
+                const cell = await this.blockService.getCellByColumnAndRow(
+                  row.id,
+                  column.id
+                );
+                if (cell && cell.properties?.value !== undefined) {
+                  sampleValues.push(cell.properties.value);
+                }
+              }
+
+              // Infer column type and role
+              if (sampleValues.length > 0) {
+                const uniqueValueRatio =
+                  new Set(sampleValues).size / sampleValues.length;
+                const inferredType = this.inferDataType(sampleValues);
+
+                schemaInfo.columnTypes[columnName] = inferredType;
+
+                // Identify potential primary keys and value columns
+                if (uniqueValueRatio === 1) {
+                  schemaInfo.primaryKeyCandidate = columnName;
+                }
+
+                // Identify numeric/date columns that likely contain values for analysis
+                if (inferredType === "number" || inferredType === "date") {
+                  schemaInfo.valueColumns.push(columnName);
+                }
+              }
+            }
+
+            // Identify potential relationships between columns
+            schemaInfo.relationships = {};
+            for (const colA of columns) {
+              const colAName = colA.properties?.name || colA.id;
+              schemaInfo.relationships[colAName] = [];
+
+              // Look for columns that frequently appear together with meaningful values
+              for (const colB of columns) {
+                const colBName = colB.properties?.name || colB.id;
+                if (colAName !== colBName) {
+                  // Could implement more sophisticated relationship detection here
+                  // For now, we'll just group all columns together
+                  schemaInfo.relationships[colAName].push(colBName);
+                }
+              }
+            }
+
+            // Store schema for future queries in this conversation
+            conversationState.schema = schemaInfo;
+          }
+
+          steps.push(
+            `Schema analysis complete: ${columns.length} columns, ${
+              Object.keys(schemaInfo.columnTypes).length
+            } typed.`
+          );
+
+          // Enhanced context for reasoning agent
+          const sheetContext = {
+            sheetId,
+            columnNames: columns.map((c) => c.properties?.name || c.id),
+            rowIds: rows.map((r) => r.id),
+            schema: schemaInfo
+          };
+
+          // 2. Reasoning Agent: Plan Retrieval
+          steps.push("Planning retrieval with schema awareness...");
+          const { plan, thoughts } = await this.reasoningAgent.planRetrieval(
+            request.messages[request.messages.length - 1].content,
+            sheetContext,
+            history
+          );
+          steps.push(...thoughts.map((t) => `Reasoning: ${t}`));
+          steps.push(`Plan generated with ${plan.length} steps.`);
+
+          if (plan.length === 0) {
+            steps.push(
+              "No retrieval plan generated. Synthesizing based on query and schema alone."
+            );
+          }
+
+          // 3. Retrieval Agent: Execute Initial Plan
+          steps.push("Retrieving initial evidence...");
+          let evidence: Evidence[] = [];
+
+          if (plan.length > 0) {
+            evidence = await this.retrievalAgent.retrieveEvidence(
+              plan,
+              sheetId
+            );
+            steps.push(`Retrieved ${evidence.length} initial evidence pieces.`);
+          }
+
+          // 4. Check if we need a feedback loop for more data
+          let needsMoreInfo = false;
+          let finalEvidence = [...evidence];
+
+          // Check if query is asking for aggregation or comparison
+          const lowerQuery =
+            request.messages[request.messages.length - 1].content.toLowerCase();
+          const isAggregationQuery =
+            lowerQuery.includes("highest") ||
+            lowerQuery.includes("lowest") ||
+            lowerQuery.includes("maximum") ||
+            lowerQuery.includes("minimum") ||
+            lowerQuery.includes("average") ||
+            lowerQuery.includes("total") ||
+            lowerQuery.includes("sum");
+
+          if (isAggregationQuery && evidence.length > 0) {
+            // For aggregation queries, we may need more comprehensive data
+            const aggregationType = this.detectAggregationType(lowerQuery);
+            const relevantValues = this.preprocessEvidenceForAggregation(
+              evidence,
+              schemaInfo
+            );
+
+            // If we have too few values for meaningful aggregation, get more
+            if (
+              Object.values(relevantValues).some(
+                (columnData) => columnData.values.length < 2
+              )
+            ) {
+              steps.push("Need more data for aggregation analysis...");
+
+              // Create a plan to get more comprehensive data
+              const followupPlan: RetrievalPlan[] = [
+                {
+                  type: "semantic",
+                  query: `${
+                    request.messages[request.messages.length - 1].content
+                  } data points`,
+                  filters: {
+                    rowIds: ["*"], // Get all rows
+                    columnIds: schemaInfo.valueColumns // Focus on numeric/date columns
+                  },
+                  reasoning: "Need more complete data for aggregation analysis"
+                }
+              ];
+
+              // Get additional evidence
+              const additionalEvidence =
+                await this.retrievalAgent.retrieveEvidence(
+                  followupPlan,
+                  sheetId
+                );
+              steps.push(
+                `Retrieved ${additionalEvidence.length} additional evidence pieces for aggregation.`
+              );
+
+              // Add to our evidence
+              finalEvidence = [...evidence, ...additionalEvidence];
+            }
+          }
+
+          // 5. Prepare evidence context for streaming synthesis
+          const evidenceContext = finalEvidence
+            .map(
+              (e, index) =>
+                `Evidence Row ${index + 1} (ID: ${e.blockId}):\n${
+                  e.content
+                }\n---`
+            )
+            .join("\n\n");
+
+          steps.push("Synthesizing answer...");
+
+          // 6. Setup streaming synthesis using LangChain
+          const model = new ChatOpenAI({
+            modelName: "gpt-4o",
+            temperature: 0.2,
+            streaming: true
+          });
+
+          const synthesisPrompt = PromptTemplate.fromTemplate(`
+          You are an AI assistant analyzing tabular data. Your task is to answer the user's query based *only* on the provided evidence.
+
+          **Instructions:**
+          * Each "Evidence Row" represents a complete row from a table with multiple columns.
+          * All data points within a single "Evidence Row" are related and describe the same entity/item.
+          * Analyze the structure of each evidence row to understand:
+            - What entity/item the row represents
+            - What attributes or measurements are provided about that entity
+            - How these data points relate to the user's question
+
+          * For questions about specific entities: Find rows containing that entity and report its attributes.
+          * For comparative questions (highest, lowest, average): Compare the relevant attribute across rows.
+          * For counting or aggregation: Analyze multiple rows to produce summary statistics.
+
+          * Always maintain the context and relationships between data points in the same row.
+          * Use [cell:ID] citations when referencing specific values.
+
+          **Evidence:**
+          ${evidenceContext}
+
+          **Conversation History:**
+          ${history.map((msg) => `${msg.role}: ${msg.content}`).join("\n")}
+
+          **User Query:**
+          {query}
+
+          **Answer:**
+          `);
+
+          // Create the chain that will stream the response
+          const chain = RunnableSequence.from([
+            synthesisPrompt,
+            model,
+            new StringOutputParser()
+          ]);
+
+          // Execute the chain and stream the response
+          const response = await chain.invoke(
+            {
+              query: request.messages[request.messages.length - 1].content
+            },
+            { callbacks: [handlers] }
+          );
+
+          // 7. Update conversation history (after streaming has already started)
+          history.push({
+            role: "user",
+            content: request.messages[request.messages.length - 1].content
+          });
+          history.push({ role: "assistant", content: response });
+          conversationState.lastQuery =
+            request.messages[request.messages.length - 1].content;
+          conversationState.lastAnswer = response;
+
+          // 8. Extract citations from evidence
+          const citations = this.extractCitationsFromEvidence(finalEvidence);
+
+          // Send metadata along with the streamed response
+          handlers.handleLLMEnd({}, "stream-complete");
+
+          // Return the stream and metadata immediately while processing continues in the background
+          return {
+            stream,
+            metadata: {
+              citations,
+              conversationId,
+              steps
+            }
+          };
+        } catch (error) {
+          console.error("Error during streaming:", error);
+          handlers.handleToolError(error as Error, "stream-error");
+          throw error;
+        }
+      })();
+
+      // Return the stream and metadata immediately while processing continues in the background
+      return {
+        stream,
+        metadata: {
+          conversationId,
+          steps
+        }
+      };
+    } catch (error: any) {
+      console.error("Error in MatrixQAService streaming setup:", error);
+      // Create an error stream
+      const errorStream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(`Error: ${error.message}`);
+          controller.close();
+        }
+      });
+
+      return {
+        stream: errorStream,
+        metadata: {
+          error: error.message,
+          conversationId,
+          steps
+        }
       };
     }
   }
@@ -410,7 +757,6 @@ export class MatrixQAService {
   }
 
   // Helper methods for aggregation analysis
-
   private detectAggregationType(query: string): string {
     if (
       query.includes("highest") ||
@@ -569,6 +915,42 @@ export class MatrixQAService {
     }
 
     return answer.trim();
+  }
+
+  // Helper to extract citations from evidence for metadata
+  private extractCitationsFromEvidence(
+    evidence: Evidence[]
+  ): MatrixQAResponse["citations"] {
+    const citations: MatrixQAResponse["citations"] = [];
+    const processedIds = new Set<string>();
+
+    for (const e of evidence) {
+      // Extract cell IDs from the evidence content
+      const cellMatches = Array.from(
+        e.content.matchAll(/\[cell:([a-fA-F0-9-]+)\]/g)
+      );
+
+      for (const match of cellMatches) {
+        const cellId = match[1];
+        if (!processedIds.has(cellId)) {
+          processedIds.add(cellId);
+
+          // Find the context snippet for this cell
+          const contextRegex = new RegExp(`([^\\n]+)\\[cell:${cellId}\\]`);
+          const contextMatch = e.content.match(contextRegex);
+          const contentSnippet = contextMatch
+            ? contextMatch[1].trim()
+            : "Referenced data";
+
+          citations.push({
+            blockId: cellId,
+            contentSnippet
+          });
+        }
+      }
+    }
+
+    return citations;
   }
 
   // Helper to infer data types from values

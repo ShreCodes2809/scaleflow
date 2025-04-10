@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import { MatrixQAResponse, MatrixQARequest } from "@/lib/types";
 import { Citation } from "./Citation";
+import { useChat } from "ai/react";
 
 interface QAChatInterfaceProps {
   sheetId: string;
@@ -22,13 +23,55 @@ export const QAChatInterface: React.FC<QAChatInterfaceProps> = ({
   sheetId,
   onCitationClick
 }) => {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
   const [conversationId, setConversationId] = useState<string | undefined>(
     undefined
   );
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
+  const [citations, setCitations] = useState<
+    Record<string, MatrixQAResponse["citations"]>
+  >({});
+  const [steps, setSteps] = useState<Record<string, string[]>>({});
+
+  // Use Vercel AI SDK's useChat hook for streaming
+  const {
+    messages,
+    input,
+    handleInputChange,
+    handleSubmit: handleAISubmit,
+    isLoading,
+    setMessages
+  } = useChat({
+    api: "/api/matrix-qa",
+    body: {
+      sheetId,
+      conversationId
+    },
+    onFinish: (message: any) => {
+      try {
+        // Extract citations and steps from metadata if available
+        const metadata = message.metadata as any;
+        if (metadata) {
+          if (metadata.citations) {
+            setCitations((prev) => ({
+              ...prev,
+              [message.id]: metadata.citations
+            }));
+          }
+          if (metadata.steps) {
+            setSteps((prev) => ({
+              ...prev,
+              [message.id]: metadata.steps
+            }));
+          }
+          if (metadata.conversationId) {
+            setConversationId(metadata.conversationId);
+          }
+        }
+      } catch (error) {
+        console.error("Error processing message metadata:", error);
+      }
+    }
+  });
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -36,122 +79,66 @@ export const QAChatInterface: React.FC<QAChatInterfaceProps> = ({
 
   useEffect(scrollToBottom, [messages]);
 
-  const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setInput(event.target.value);
-  };
-
-  const handleSubmit = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!input.trim() || isLoading) return;
-
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      role: "user",
-      content: input
-    };
-    setMessages((prev) => [...prev, userMessage]);
-    setInput("");
-    setIsLoading(true);
-
-    try {
-      const requestBody: MatrixQARequest = {
-        query: input,
-        sheetId: sheetId,
-        conversationId: conversationId
-      };
-
-      const response = await fetch("/api/matrix-qa", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(requestBody)
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(
-          errorData.message || `Request failed with status ${response.status}`
-        );
-      }
-
-      const data: MatrixQAResponse = await response.json();
-
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: data.answer,
-        citations: data.citations,
-        steps: data.steps
-      };
-      setMessages((prev) => [...prev, assistantMessage]);
-      setConversationId(data.conversationId); // Persist conversation ID
-    } catch (error: any) {
-      console.error("QA Error:", error);
-      const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: `Error: ${error.message || "Failed to get response."}`
-      };
-      setMessages((prev) => [...prev, errorMessage]);
-    } finally {
-      setIsLoading(false);
-    }
+  const handleFormSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    handleAISubmit(e);
   };
 
   // Custom component renderer for markdown
-  const renderMarkdown = useCallback(
-    (content: string, citations?: MatrixQAResponse["citations"]) => {
-      const citationMap = new Map(
-        citations?.map((c) => [`[cell:${c.blockId}]`, c])
-      );
+  const renderMarkdown = (
+    content: string,
+    messageCitations?: MatrixQAResponse["citations"]
+  ) => {
+    const citationMap = new Map(
+      messageCitations?.map((c) => [`[cell:${c.blockId}]`, c])
+    );
 
-      return (
-        <ReactMarkdown
-          components={{
-            p: ({ node, ...props }) => (
-              <p className='mb-2 last:mb-0' {...props} />
-            ),
-            // Custom renderer to replace citation text with the Citation component
-            text: ({ node: textNode, ...textProps }) => {
-              const textValue = (textNode as any).value;
-              const citationMatch = textValue.match(/(\[cell:[a-fA-F0-9-]+\])/);
+    return (
+      <ReactMarkdown
+        components={{
+          p: ({ node, ...props }) => (
+            <p className='mb-2 last:mb-0' {...props} />
+          ),
+          // Custom renderer to replace citation text with the Citation component
+          text: ({ node: textNode, ...textProps }) => {
+            const textValue = (textNode as any).value;
+            const citationMatch = textValue.match(/(\[cell:[a-fA-F0-9-]+\])/);
 
-              if (citationMatch) {
-                const citationText = citationMatch[0];
-                const citationData = citationMap.get(citationText);
-                const parts = textValue.split(citationText);
+            if (citationMatch) {
+              const citationText = citationMatch[0];
+              const citationData = citationMap.get(citationText);
+              const parts = textValue.split(citationText);
 
-                return (
-                  <>
-                    {parts[0]}
-                    {citationData ? (
-                      <Citation
-                        blockId={citationData.blockId}
-                        contentSnippet={citationData.contentSnippet}
-                        onClick={onCitationClick}
-                      />
-                    ) : (
-                      citationText // Render as text if citation data not found
-                    )}
-                    {parts[1]}
-                  </>
-                );
-              }
-              // Create a safe set of props for the span element
-              const safeProps = {
-                className: textProps.className,
-                style: textProps.style,
-                id: textProps.id
-              };
-              return <span {...safeProps}>{textValue}</span>;
+              return (
+                <>
+                  {parts[0]}
+                  {citationData ? (
+                    <Citation
+                      blockId={citationData.blockId}
+                      contentSnippet={citationData.contentSnippet}
+                      onClick={onCitationClick}
+                    />
+                  ) : (
+                    citationText // Render as text if citation data not found
+                  )}
+                  {parts[1]}
+                </>
+              );
             }
-          }}
-        >
-          {content}
-        </ReactMarkdown>
-      );
-    },
-    [onCitationClick]
-  );
+            // Create a safe set of props for the span element
+            const safeProps = {
+              className: textProps.className,
+              style: textProps.style,
+              id: textProps.id
+            };
+            return <span {...safeProps}>{textValue}</span>;
+          }
+        }}
+      >
+        {content}
+      </ReactMarkdown>
+    );
+  };
 
   return (
     <div className='flex flex-col h-[600px] border rounded bg-white shadow'>
@@ -171,13 +158,13 @@ export const QAChatInterface: React.FC<QAChatInterfaceProps> = ({
                   : "bg-gray-200 text-gray-800"
               }`}
             >
-              {renderMarkdown(msg.content, msg.citations)}
+              {renderMarkdown(msg.content, citations[msg.id])}
               {/* Optional: Display agent steps */}
-              {msg.role === "assistant" && msg.steps && (
+              {msg.role === "assistant" && steps[msg.id] && (
                 <details className='text-xs mt-2 text-gray-500'>
-                  <summary>Agent Steps ({msg.steps.length})</summary>
+                  <summary>Agent Steps ({steps[msg.id].length})</summary>
                   <ul className='list-disc pl-4'>
-                    {msg.steps.map((step, i) => (
+                    {steps[msg.id].map((step, i) => (
                       <li key={i}>{step}</li>
                     ))}
                   </ul>
@@ -191,7 +178,7 @@ export const QAChatInterface: React.FC<QAChatInterfaceProps> = ({
 
       {/* Input Area */}
       <div className='p-4 border-t'>
-        <form onSubmit={handleSubmit} className='flex space-x-2'>
+        <form onSubmit={handleFormSubmit} className='flex space-x-2'>
           <input
             type='text'
             value={input}

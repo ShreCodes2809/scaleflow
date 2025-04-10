@@ -63,7 +63,10 @@ export interface CellBlock extends Block {
 
 // API Types
 export interface MatrixQARequest {
-  query: string;
+  messages: {
+    role: string;
+    content: string;
+  }[];
   sheetId: string;
   conversationId?: string; // For multi-turn
 }
