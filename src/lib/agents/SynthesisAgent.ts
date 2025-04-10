@@ -5,6 +5,87 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const SYNTHESIS_MODEL = "gpt-4o"; // Or a model good at following instructions
 
 export class SynthesisAgent {
+  // Add to SynthesisAgent.ts
+  async analyzeAggregateData(
+    evidence: Evidence[],
+    aggregationType: string
+  ): Promise<any> {
+    // Group evidence by columns for cross-row analysis
+    const columnData: Record<
+      string,
+      Array<{ value: string | number; rowId: string; cellId: string }>
+    > = {};
+
+    // Extract numeric values by column
+    evidence.forEach((e) => {
+      // Parse the row data format to extract column values
+      const rowLines = e.content.split("\n");
+      rowLines.forEach((line) => {
+        const match = line.match(/- ([^:]+): (.*) \[cell:([^\]]+)\]/);
+        if (match) {
+          const [_, columnName, value, cellId] = match;
+
+          if (!columnData[columnName]) {
+            columnData[columnName] = [];
+          }
+
+          // Store value with row reference and cell citation
+          columnData[columnName].push({
+            value: isNaN(Number(value)) ? value : Number(value),
+            rowId: e.rowId,
+            cellId
+          });
+        }
+      });
+    });
+
+    // Perform the requested aggregation
+    const results: Record<
+      string,
+      { value: number; citation?: string; citations?: string[] }
+    > = {};
+
+    Object.entries(columnData).forEach(([column, dataPoints]) => {
+      // Only process numeric columns for aggregation
+      const numericValues = dataPoints
+        .filter((dp) => typeof dp.value === "number")
+        .map((dp) => dp.value as number);
+
+      if (numericValues.length === 0) return;
+
+      switch (aggregationType.toLowerCase()) {
+        case "max":
+          const maxValue = Math.max(...numericValues);
+          const maxPoint = dataPoints.find((dp) => dp.value === maxValue);
+          results[column] = { value: maxValue, citation: maxPoint?.cellId };
+          break;
+        case "min":
+          const minValue = Math.min(...numericValues);
+          const minPoint = dataPoints.find((dp) => dp.value === minValue);
+          results[column] = { value: minValue, citation: minPoint?.cellId };
+          break;
+        case "sum":
+          const sum = numericValues.reduce((acc, val) => acc + val, 0);
+          results[column] = {
+            value: sum,
+            citations: dataPoints.map((dp) => dp.cellId)
+          };
+          break;
+        case "average":
+          const avg =
+            numericValues.reduce((acc, val) => acc + val, 0) /
+            numericValues.length;
+          results[column] = {
+            value: avg,
+            citations: dataPoints.map((dp) => dp.cellId)
+          };
+          break;
+      }
+    });
+
+    return results;
+  }
+
   async synthesizeAnswer(
     userQuery: string,
     evidence: Evidence[],
@@ -28,25 +109,29 @@ export class SynthesisAgent {
     console.log("Evidence Context for Synthesis:", evidenceContext); // CRITICAL: Check this log output carefully! Does it contain the linked Country/Population data as expected?
 
     // --- FURTHER REFINEMENT IDEAS FOR SYSTEM PROMPT ---
+    // In SynthesisAgent.ts
     const systemPrompt = `
-You are an AI assistant. Your task is to answer the user's query based *only* on the provided "Evidence Row" blocks.
+You are an AI assistant analyzing tabular data. Your task is to answer the user's query based *only* on the provided evidence.
 
 **Instructions:**
-*   Each "Evidence Row" contains data points from a single row in a table.
-*   Data points are formatted like "Column Name: Value [cell:CELL_ID]". The [cell:CELL_ID] tag identifies the specific source cell for that value.
-*   Analyze the user's query.
-*   Examine the content within each "Evidence Row" block. Data points listed together in the same block are related (belong to the same row).
-*   Synthesize a concise answer using *only* information present in the evidence.
-*   **CITATION:** When you use a specific value (like a name, number, or text) from the evidence, you MUST immediately include the \`[cell:CELL_ID]\` tag that follows that value in the evidence.
-    *   Example Evidence: \`Country: France [cell:abc]\nPopulation: 67M [cell:def]\`
-    *   Example Answer: "France [cell:abc] has a population of 67M [cell:def]."
-*   **COMPARISONS:** If the query asks for highest/lowest etc., compare the relevant values (e.g., 'Population') found within the evidence blocks. Make sure to link the value back to the correct entity (e.g., 'Country') from the *same* evidence block.
-*   Do NOT use the "Evidence Row ID" (e.g., \`ID: row-uuid\`) for citation. Use only the inline \`[cell:CELL_ID]\` tags.
-*   If the necessary linked information isn't present within any single evidence block (e.g., you find population numbers but no country names in the same blocks), state that you cannot answer the question based on the provided evidence structure. Do not make assumptions.
+* Each "Evidence Row" represents a complete row from a table with multiple columns.
+* All data points within a single "Evidence Row" are related and describe the same entity/item.
+* Analyze the structure of each evidence row to understand:
+  - What entity/item the row represents
+  - What attributes or measurements are provided about that entity
+  - How these data points relate to the user's question
+
+* For questions about specific entities: Find rows containing that entity and report its attributes.
+* For comparative questions (highest, lowest, average): Compare the relevant attribute across rows.
+* For counting or aggregation: Analyze multiple rows to produce summary statistics.
+
+* Always maintain the context and relationships between data points in the same row.
+* Use [cell:ID] citations when referencing specific values.
 
 **Evidence:**
 ${evidenceContext}
 `;
+
     // --- END REFINEMENT IDEAS ---
 
     const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [

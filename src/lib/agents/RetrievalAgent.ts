@@ -147,44 +147,44 @@ export class RetrievalAgent {
 
     console.log(`Consolidating evidence from ${allRowIds.length} unique rows.`);
 
+    // In RetrievalAgent.ts
     for (const rowId of allRowIds) {
       const rowCells = cellsByRow.get(rowId) || [];
       if (rowCells.length === 0) continue;
 
-      // Combine cell data into a single content string for the row
-      // Include inline citations for each piece of data
-      let combinedContent = "";
-      const cellSourcesForMetadata: string[] = []; // Optional: for metadata
+      // Preserve table layout in the evidence content
+      let combinedContent = "Row Data:\n";
 
-      // Sort cells by column position if available, otherwise by creation time or ID?
-      // Sorting helps present data consistently to the Synthesis agent.
-      // Example: Sorting by column name if available
+      // Sort alphabetically by column name for consistency
       rowCells.sort((a, b) => {
         const nameA = a.properties?.column?.name ?? "";
         const nameB = b.properties?.column?.name ?? "";
         return nameA.localeCompare(nameB);
       });
 
+      // Create a structured representation that clearly shows row context
       rowCells.forEach((cell) => {
-        // Try to get a meaningful column name, fallback to partial ID
         const colName =
           cell.properties?.column?.name ||
-          `Col(${cell.properties?.column?.id?.substring(0, 4) ?? "N/A"})`;
-        const cellValue = cell.properties?.value?.toString() ?? ""; // Use nullish coalescing
-        // Add the data point with its inline citation
-        combinedContent += `${colName}: ${cellValue} [cell:${cell.id}]\n`;
-        cellSourcesForMetadata.push(`[cell:${cell.id}]`);
+          `Column(${
+            cell.properties?.column?.id?.substring(0, 8) ?? "unknown"
+          })`;
+        const cellValue = cell.properties?.value?.toString() ?? "";
+        combinedContent += `- ${colName}: ${cellValue} [cell:${cell.id}]\n`;
       });
 
-      // Create one Evidence object per relevant row
       consolidatedEvidence.push({
-        blockId: rowId, // Use rowId as the primary identifier for this evidence piece
-        content: combinedContent.trim(), // The combined string with inline citations
+        blockId: rowId,
+        content: combinedContent.trim(),
         rowId: rowId,
-        columnId: "multiple", // Indicate content comes from multiple columns
-        sheetId: sheetId
-        // Optional: Add citations for all contributing cells to metadata if needed elsewhere
-        // metadata: { cellSources: cellSourcesForMetadata }
+        sheetId: sheetId,
+        columnId: rowCells[0].properties?.column?.id,
+        // Add metadata to help synthesis agent understand the structure
+        metadata: {
+          isRowData: true,
+          columnCount: rowCells.length,
+          columns: rowCells.map((c) => c.properties?.column?.name)
+        }
       });
     }
 

@@ -91,6 +91,17 @@ Sheet Context:
         : ""
     }
 
+Your first task is to analyze the column structure to understand:
+1. Which columns represent entity identifiers (e.g., IDs, names, codes)
+2. Which columns contain attributes or values about those entities
+3. What relationships exist between columns
+
+Based on this analysis, determine:
+- What columns are relevant to the user's query
+- Which rows might contain the answer
+- What retrieval strategy will preserve the relationships between related data
+
+Now,
 
 Available Retrieval Methods & Rules for the 'plan' array:
 Each object in the 'plan' array MUST have 'type', 'filters', and 'reasoning'.
