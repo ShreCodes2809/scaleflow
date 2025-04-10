@@ -2,6 +2,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
+import ReactMarkdown from "react-markdown";
 import { MatrixQAResponse } from "@/lib/types";
 import { Citation } from "./Citation";
 import { useChat, Message as VercelMessage } from "ai/react";
@@ -120,7 +121,7 @@ export const QAChatInterface: React.FC<QAChatInterfaceProps> = ({
     });
   };
 
-  // --- Fixed rendering logic ---
+  // Render individual message content with markdown and citations
   const renderMessageContent = (messageId: string, content: string) => {
     // Get metadata specific to this message ID from state
     const metadata = messageMetadata[messageId] || {};
@@ -132,10 +133,6 @@ export const QAChatInterface: React.FC<QAChatInterfaceProps> = ({
       citationMap.set(citation.blockId, citation);
     });
 
-    console.log(
-      `Message ${messageId} has ${messageCitations.length} citations`
-    );
-
     // Create a regex that looks for the citation pattern
     const regex = /\[cell:([a-fA-F0-9-]+)\]/g;
 
@@ -144,13 +141,17 @@ export const QAChatInterface: React.FC<QAChatInterfaceProps> = ({
     let lastIndex = 0;
     let match;
 
-    // Iterate through all matches
-    while ((match = regex.exec(content)) !== null) {
+    // Make a copy of content to manipulate
+    let tempContent = content;
+
+    // Find all matches in the content
+    while ((match = regex.exec(tempContent)) !== null) {
       // Add text before the match
       if (match.index > lastIndex) {
+        const textPart = tempContent.substring(lastIndex, match.index);
         parts.push({
           type: "text",
-          content: content.substring(lastIndex, match.index)
+          content: textPart
         });
       }
 
@@ -166,22 +167,24 @@ export const QAChatInterface: React.FC<QAChatInterfaceProps> = ({
     }
 
     // Add any remaining text
-    if (lastIndex < content.length) {
+    if (lastIndex < tempContent.length) {
       parts.push({
         type: "text",
-        content: content.substring(lastIndex)
+        content: tempContent.substring(lastIndex)
       });
     }
 
     // Render the parts
     return parts.map((part, index) => {
       if (part.type === "text") {
+        // Use ReactMarkdown to render text parts with markdown formatting
         return (
           <React.Fragment key={`${messageId}-text-${index}`}>
-            {part.content}
+            <ReactMarkdown>{part.content}</ReactMarkdown>
           </React.Fragment>
         );
       } else {
+        // Render citation components directly
         return (
           <Citation
             key={`${messageId}-citation-${index}`}
@@ -213,7 +216,11 @@ export const QAChatInterface: React.FC<QAChatInterfaceProps> = ({
               }`}
             >
               {/* Use the updated rendering function */}
-              <div className='prose prose-sm max-w-none'>
+              <div
+                className={`prose prose-sm max-w-none ${
+                  msg.role === "user" ? "prose-invert" : ""
+                }`}
+              >
                 {renderMessageContent(msg.id, msg.content)}
               </div>
 
