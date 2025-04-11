@@ -71,6 +71,7 @@ export const QAChatInterface: React.FC<QAChatInterfaceProps> = ({
     },
     onFinish: (message) => {
       if (lastResponseMetadata) {
+        console.log("Last response metadata:", lastResponseMetadata);
         setMessageMetadata((prev) => ({
           ...prev,
           [message.id]: {
@@ -208,16 +209,13 @@ export const QAChatInterface: React.FC<QAChatInterfaceProps> = ({
 
               {msg.role === "assistant" && messageMetadata[msg.id] && (
                 <details className='text-xs mt-2 text-gray-400 cursor-pointer'>
-                  <summary>Agent Steps (5)</summary>
+                  <summary>
+                    Agent Steps ({messageMetadata[msg.id]?.steps?.length || 0})
+                  </summary>
                   <ul className='list-disc pl-4 mt-1'>
-                    <li>Analyzing table structure...</li>
-                    <li>Reasoning retrieval with schema awareness...</li>
-                    <li>Retrieving evidence...</li>
-                    <li>
-                      Found {messageMetadata[msg.id]?.citations?.length || 0}{" "}
-                      relevant data points
-                    </li>
-                    <li>Synthesizing answer based on evidence...</li>
+                    {messageMetadata[msg.id]?.steps?.map((step, index) => (
+                      <li key={index}>{step}</li>
+                    ))}
                   </ul>
                 </details>
               )}
