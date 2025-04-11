@@ -105,12 +105,35 @@ const formatCurrency = (amount: number) => {
   }).format(amount);
 };
 
+// Add country code to full name mapping
+const countryNames: { [key: string]: string } = {
+  AUS: "Australia",
+  USA: "United States",
+  CAN: "Canada",
+  GBR: "United Kingdom",
+  DEU: "Germany"
+};
+
+const getFullCountryName = (countryCode: string) => {
+  return countryNames[countryCode] || countryCode;
+};
+
 const generateRowText = (rowData: any, companyName: string) => {
   // Create a text representation of the entire row
   let text = `Information about ${companyName || "a company"}: `;
 
   if (rowData["Country"]) {
-    text += `Located in ${rowData["Country"]}. `;
+    const countryName = getFullCountryName(rowData["Country"]);
+    text += `Located in ${countryName} (${rowData["Country"]}). `;
+
+    // Add explicit geographic context for search
+    if (rowData["Total Raised"]) {
+      const amount =
+        typeof rowData["Total Raised"] === "number"
+          ? formatCurrency(rowData["Total Raised"])
+          : rowData["Total Raised"];
+      text += `Part of the ${countryName} funding ecosystem with ${amount} raised. `;
+    }
   }
 
   if (rowData["People Count"]) {
@@ -141,8 +164,12 @@ const generateRowText = (rowData: any, companyName: string) => {
     text += `Website: ${rowData["URL"]}. `;
   }
 
-  // Add specific phrases to help with querying
-  text += `This row contains data about funding, employees, and company metrics. `;
+  // Add specific phrases to help with country-based querying
+  if (rowData["Country"]) {
+    const countryName = getFullCountryName(rowData["Country"]);
+    text += `This row contains funding data for a company in ${countryName}. `;
+    text += `Use this for analyzing ${countryName} funding trends. `;
+  }
 
   return text.trim();
 };
@@ -155,41 +182,62 @@ const generateCellContextualText = (
   if (cellValue === null) return "";
 
   const companyName = rowData["Company"] || "the company";
+  let countryInfo = "";
+
+  // Add country context to all cells
+  if (rowData["Country"]) {
+    const countryName = getFullCountryName(rowData["Country"]);
+    countryInfo = ` based in ${countryName}`;
+  }
 
   // Add context based on column type
   if (columnName === "Total Raised") {
     const fundingRound = rowData["Last Funding Round"] || "a funding round";
-    return `${companyName} raised ${formatCurrency(
+    return `${companyName}${countryInfo} raised ${formatCurrency(
       Number(cellValue)
-    )} in ${fundingRound}`;
+    )} in ${fundingRound}. This data point can be used for analyzing funding trends${
+      countryInfo ? " in " + getFullCountryName(rowData["Country"]) : ""
+    }.`;
   }
 
   if (columnName === "Last Funding Round") {
     const amount = rowData["Total Raised"]
       ? formatCurrency(Number(rowData["Total Raised"]))
       : "funding";
-    return `${companyName} completed a ${cellValue} round raising ${amount}`;
+    return `${companyName}${countryInfo} completed a ${cellValue} round raising ${amount}. This shows the funding stage distribution${
+      countryInfo ? " in " + getFullCountryName(rowData["Country"]) : ""
+    }.`;
   }
 
   if (columnName === "People Count") {
-    return `${companyName} has ${cellValue} employees`;
+    return `${companyName}${countryInfo} has ${cellValue} employees. This shows company size${
+      countryInfo ? " in " + getFullCountryName(rowData["Country"]) : ""
+    }.`;
   }
 
   if (columnName === "Web Traffic") {
-    return `${companyName} receives ${cellValue} visitors to their website`;
+    return `${companyName}${countryInfo} receives ${cellValue} visitors to their website. This shows popularity${
+      countryInfo
+        ? " of companies in " + getFullCountryName(rowData["Country"])
+        : ""
+    }.`;
   }
 
   if (columnName === "Country") {
-    return `${companyName} is located in ${cellValue}`;
+    const countryName = getFullCountryName(String(cellValue));
+    return `${companyName} is located in ${countryName} (${cellValue}). This data point can be used for geographic funding analysis in ${countryName}.`;
   }
 
   if (columnName === "Company") {
-    return `Information about ${cellValue}: a company in the database`;
+    return `Information about ${cellValue}: a company${
+      countryInfo ? " based in " + getFullCountryName(rowData["Country"]) : ""
+    } in the database.`;
   }
 
   // Generic fallback
-  return `${columnName} for ${companyName}: ${cellValue}`;
+  return `${columnName} for ${companyName}${countryInfo}: ${cellValue}`;
 };
+
 // --- ---
 
 export async function POST(request: NextRequest) {
