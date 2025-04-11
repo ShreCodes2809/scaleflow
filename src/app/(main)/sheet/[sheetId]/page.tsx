@@ -1,11 +1,6 @@
-// src/app/(main)/sheet/[sheetId]/page.tsx
-"use client";
-
-import { useState, useEffect, useCallback } from "react";
 import { notFound } from "next/navigation";
 import { BlockService } from "@/lib/services/BlockService";
-import { SheetGrid } from "@/components/sheet/SheetGrid";
-import { QAChatInterface } from "@/components/qa/QAChatInterface";
+import { SheetPageClient } from "./SheetPageClient";
 import { CellBlock, RowBlock, ColumnBlock, SheetBlock } from "@/lib/types";
 
 interface SheetData {
@@ -73,107 +68,36 @@ async function getSheetData(
   }
 }
 
-export default function SheetPage({ params }: { params: { sheetId: string } }) {
+export default async function SheetPage({
+  params
+}: {
+  params: { sheetId: string };
+}) {
   const { sheetId } = params;
   const orgId = "rc_org_1";
 
-  const [sheetData, setSheetData] = useState<SheetData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [highlightedCell, setHighlightedCell] = useState<string | null>(null);
+  try {
+    // Fetch data server-side
+    const sheetData = await getSheetData(sheetId, orgId);
 
-  useEffect(() => {
-    async function loadData() {
-      setIsLoading(true);
-      setError(null);
-      setHighlightedCell(null);
-      try {
-        const data = await getSheetData(sheetId, orgId);
-        if (!data) {
-          setError("Sheet not found or access denied.");
-        } else {
-          setSheetData(data);
-        }
-      } catch (err: any) {
-        console.error("Client-side fetch error:", err);
-        setError(`Failed to load sheet data: ${err.message}`);
-      } finally {
-        setIsLoading(false);
-      }
+    if (!sheetData) {
+      notFound();
     }
-    loadData();
-  }, [sheetId, orgId]);
 
-  const handleCitationClick = useCallback((blockId: string) => {
-    setHighlightedCell(blockId);
+    // Pass data to client component
+    return <SheetPageClient sheetData={sheetData} sheetId={sheetId} />;
+  } catch (error) {
+    // You can handle errors in different ways server-side
+    console.error("Server error fetching sheet data:", error);
 
-    setTimeout(() => {
-      const element = document.getElementById(`cell-${blockId}`);
-      if (element) {
-        element.scrollIntoView({
-          behavior: "smooth",
-          block: "center",
-          inline: "center"
-        });
-        element.classList.add("flash-highlight");
-        setTimeout(() => {
-          element.classList.remove("flash-highlight");
-        }, 1500);
-      }
-    }, 100);
-  }, []);
-
-  if (isLoading) {
-    return (
-      <div className='flex justify-center items-center min-h-screen bg-[#121212] text-gray-300'>
-        Loading sheet data...
-      </div>
-    );
-  }
-
-  if (error) {
+    // Option 1: Return an error UI
     return (
       <div className='flex justify-center items-center min-h-screen bg-[#121212] text-red-400'>
-        Error: {error}
+        Error loading sheet data. Please try again later.
       </div>
     );
+
+    // Option 2: Throw to Next.js error boundary
+    // throw new Error("Failed to load sheet data");
   }
-
-  if (!sheetData) {
-    notFound();
-  }
-
-  const { sheet, columns, rows, cells } = sheetData;
-
-  return (
-    <div className='flex flex-col h-screen overflow-hidden bg-[#121212] text-gray-200'>
-      {/* Header with title */}
-      <div className='p-4 border-b border-[#2d2d2d] bg-[#1a1a1a]'>
-        <h2 className='text-xl font-semibold text-white'>
-          {sheet.properties?.title || "Sheet"}
-        </h2>
-      </div>
-
-      {/* Main content area with fixed height */}
-      <div className='flex-grow grid grid-cols-1 lg:grid-cols-3 gap-4 p-4 h-[calc(100vh-64px)] overflow-hidden'>
-        {/* Sheet Grid with fixed height */}
-        <div className='lg:col-span-2 h-full overflow-hidden flex flex-col'>
-          <SheetGrid
-            columns={columns}
-            rows={rows}
-            cells={cells}
-            highlightedCell={highlightedCell}
-          />
-        </div>
-
-        {/* QA Chat with fixed height */}
-        <div className='lg:col-span-1 h-full overflow-hidden'>
-          <QAChatInterface
-            sheetId={sheetId}
-            onCitationClick={handleCitationClick}
-          />
-        </div>
-      </div>
-    </div>
-  );
 }

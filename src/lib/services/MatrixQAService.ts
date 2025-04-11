@@ -583,6 +583,8 @@ export class MatrixQAService {
           // Send metadata along with the streamed response
           handlers.handleLLMEnd({}, "stream-complete");
 
+          console.log("STEPS before return:", steps);
+
           // Return the stream and metadata immediately while processing continues in the background
           return {
             stream,
