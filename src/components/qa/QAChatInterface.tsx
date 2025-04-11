@@ -21,7 +21,6 @@ export const QAChatInterface: React.FC<QAChatInterfaceProps> = ({
   );
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
 
-  // State to store metadata (citations, steps) associated with message IDs
   const [messageMetadata, setMessageMetadata] = useState<
     Record<
       string,
@@ -32,7 +31,6 @@ export const QAChatInterface: React.FC<QAChatInterfaceProps> = ({
     >
   >({});
 
-  // State to temporarily hold metadata from the latest response header
   const [lastResponseMetadata, setLastResponseMetadata] = useState<any>(null);
 
   const {
@@ -50,36 +48,24 @@ export const QAChatInterface: React.FC<QAChatInterfaceProps> = ({
       sheetId,
       conversationId
     },
-    // --- Capture metadata from header ---
     onResponse: (response) => {
-      console.log("onResponse received");
       const resMetadataHeader = response.headers.get("X-Metadata");
       if (resMetadataHeader) {
         try {
           const resMetadata = JSON.parse(resMetadataHeader);
-          console.log("Metadata from header:", resMetadata);
-          // Store the latest metadata received
           setLastResponseMetadata(resMetadata);
-          // Set conversationId immediately if available and not set
           if (resMetadata.conversationId && !conversationId) {
             setConversationId(resMetadata.conversationId);
           }
         } catch (e) {
           console.error("Failed to parse X-Metadata header", e);
-          setLastResponseMetadata(null); // Clear if parsing fails
+          setLastResponseMetadata(null);
         }
       } else {
-        console.log("No X-Metadata header found in response.");
-        setLastResponseMetadata(null); // Clear if header is missing
+        setLastResponseMetadata(null);
       }
     },
-    // --- Associate metadata with the completed message ---
     onFinish: (message) => {
-      console.log(
-        `onFinish for message ${message.id}. Last metadata:`,
-        lastResponseMetadata
-      );
-      // Associate the *last received* metadata with this finished message
       if (lastResponseMetadata) {
         setMessageMetadata((prev) => ({
           ...prev,
@@ -88,17 +74,15 @@ export const QAChatInterface: React.FC<QAChatInterfaceProps> = ({
             steps: lastResponseMetadata.steps
           }
         }));
-        // Clear the temporary metadata holder
         setLastResponseMetadata(null);
       }
-      // Update conversationId if it came late
       if (lastResponseMetadata?.conversationId && !conversationId) {
         setConversationId(lastResponseMetadata.conversationId);
       }
     },
     onError: (error) => {
       console.error("Chat error:", error);
-      setLastResponseMetadata(null); // Clear temp metadata on error
+      setLastResponseMetadata(null);
     }
   });
 
@@ -110,7 +94,7 @@ export const QAChatInterface: React.FC<QAChatInterfaceProps> = ({
 
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setLastResponseMetadata(null); // Clear temp metadata before new request
+    setLastResponseMetadata(null);
     handleAISubmit(e, {
       options: {
         body: {
@@ -121,32 +105,22 @@ export const QAChatInterface: React.FC<QAChatInterfaceProps> = ({
     });
   };
 
-  // Render individual message content with markdown and citations
   const renderMessageContent = (messageId: string, content: string) => {
-    // Get metadata specific to this message ID from state
     const metadata = messageMetadata[messageId] || {};
     const messageCitations = metadata.citations || [];
 
-    // Create a mapping of citation IDs to their data
     const citationMap = new Map();
     messageCitations.forEach((citation) => {
       citationMap.set(citation.blockId, citation);
     });
 
-    // Create a regex that looks for the citation pattern
     const regex = /\[cell:([a-fA-F0-9-]+)\]/g;
-
-    // Split the content into parts (text and citations)
     const parts = [];
     let lastIndex = 0;
     let match;
-
-    // Make a copy of content to manipulate
     let tempContent = content;
 
-    // Find all matches in the content
     while ((match = regex.exec(tempContent)) !== null) {
-      // Add text before the match
       if (match.index > lastIndex) {
         const textPart = tempContent.substring(lastIndex, match.index);
         parts.push({
@@ -155,7 +129,6 @@ export const QAChatInterface: React.FC<QAChatInterfaceProps> = ({
         });
       }
 
-      // Add the citation
       const blockId = match[1];
       parts.push({
         type: "citation",
@@ -166,7 +139,6 @@ export const QAChatInterface: React.FC<QAChatInterfaceProps> = ({
       lastIndex = match.index + match[0].length;
     }
 
-    // Add any remaining text
     if (lastIndex < tempContent.length) {
       parts.push({
         type: "text",
@@ -174,17 +146,14 @@ export const QAChatInterface: React.FC<QAChatInterfaceProps> = ({
       });
     }
 
-    // Render the parts
     return parts.map((part, index) => {
       if (part.type === "text") {
-        // Use ReactMarkdown to render text parts with markdown formatting
         return (
           <React.Fragment key={`${messageId}-text-${index}`}>
             <ReactMarkdown>{part.content}</ReactMarkdown>
           </React.Fragment>
         );
       } else {
-        // Render citation components directly
         return (
           <Citation
             key={`${messageId}-citation-${index}`}
@@ -198,9 +167,9 @@ export const QAChatInterface: React.FC<QAChatInterfaceProps> = ({
   };
 
   return (
-    <div className='flex flex-col h-full border rounded bg-white shadow overflow-hidden'>
-      {/* Message Display Area */}
-      <div className='flex-grow overflow-y-auto p-4 space-y-4'>
+    <div className='flex flex-col h-full bg-[#1e1e1e] rounded-md overflow-hidden border border-[#2d2d2d]'>
+      {/* Message Display Area - Fixed height with scroll */}
+      <div className='flex-grow overflow-y-auto p-4 space-y-4 scrollbar-thin scrollbar-thumb-gray-700'>
         {vercelMessages.map((msg) => (
           <div
             key={msg.id}
@@ -209,24 +178,22 @@ export const QAChatInterface: React.FC<QAChatInterfaceProps> = ({
             }`}
           >
             <div
-              className={`max-w-lg px-4 py-2 rounded-lg shadow-sm ${
+              className={`max-w-lg px-4 py-2 rounded-lg ${
                 msg.role === "user"
-                  ? "bg-blue-500 text-white"
-                  : "bg-gray-100 text-gray-800"
+                  ? "bg-purple-800 text-white"
+                  : "bg-[#252525] text-gray-200"
               }`}
             >
-              {/* Use the updated rendering function */}
               <div
                 className={`prose prose-sm max-w-none ${
-                  msg.role === "user" ? "prose-invert" : ""
+                  msg.role === "user" ? "prose-invert" : "prose-invert"
                 }`}
               >
                 {renderMessageContent(msg.id, msg.content)}
               </div>
 
-              {/* Optional: Display agent steps */}
               {msg.role === "assistant" && messageMetadata[msg.id]?.steps && (
-                <details className='text-xs mt-2 text-gray-500 cursor-pointer'>
+                <details className='text-xs mt-2 text-gray-400 cursor-pointer'>
                   <summary>
                     Agent Steps ({messageMetadata[msg.id]?.steps?.length})
                   </summary>
@@ -240,11 +207,11 @@ export const QAChatInterface: React.FC<QAChatInterfaceProps> = ({
             </div>
           </div>
         ))}
-        <div ref={messagesEndRef} /> {/* Anchor for scrolling */}
+        <div ref={messagesEndRef} />
       </div>
 
-      {/* Input Area */}
-      <div className='p-4 border-t bg-gray-50 flex-shrink-0'>
+      {/* Input Area - Fixed at bottom */}
+      <div className='p-3 border-t border-[#2d2d2d] bg-[#252525] flex-shrink-0'>
         <form onSubmit={handleFormSubmit} className='flex space-x-2'>
           <input
             type='text'
@@ -252,13 +219,13 @@ export const QAChatInterface: React.FC<QAChatInterfaceProps> = ({
             onChange={handleInputChange}
             placeholder='Ask about the data...'
             disabled={isLoading}
-            className='flex-grow px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100'
+            className='flex-grow px-3 py-2 bg-[#1e1e1e] border border-[#3d3d3d] rounded-md text-gray-200 focus:outline-none focus:ring-1 focus:ring-purple-600 disabled:bg-[#2a2a2a] disabled:text-gray-500'
             aria-label='Chat input'
           />
           <button
             type='submit'
             disabled={isLoading || !input.trim()}
-            className='px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed'
+            className='px-4 py-2 bg-purple-700 text-white rounded-md hover:bg-purple-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed focus:ring-offset-[#252525]'
             aria-label='Send chat message'
           >
             {isLoading ? (

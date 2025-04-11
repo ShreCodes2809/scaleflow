@@ -13,24 +13,20 @@ export const Citation: React.FC<CitationProps> = ({
   onClick
 }) => {
   const handleClick = (e: React.MouseEvent) => {
-    e.preventDefault(); // Prevent any default button behavior
-    e.stopPropagation(); // Prevent event bubbling if needed
+    e.preventDefault();
+    e.stopPropagation();
     onClick(blockId);
   };
 
-  // Use Tailwind classes for purple background, text, and hover effect
-  // Adjust shades (e.g., purple-100, purple-200, purple-800) as needed
   return (
     <button
       onClick={handleClick}
       title={
         contentSnippet ? `Source: ${contentSnippet}` : `Source Cell: ${blockId}`
       }
-      className='inline-block bg-purple-100 text-purple-800 text-xs font-medium px-1.5 py-0.5 rounded hover:bg-purple-200 focus:outline-none focus:ring-1 focus:ring-purple-300 mx-0.5 align-middle cursor-pointer' // Added cursor-pointer
+      className='inline-block bg-purple-900 bg-opacity-20 text-purple-300 text-xs font-medium px-1.5 py-0.5 rounded hover:bg-opacity-30 focus:outline-none focus:ring-1 focus:ring-purple-700 mx-0.5 align-middle cursor-pointer'
     >
-      {/* Displaying a short, consistent identifier might be better than first 4 chars */}
-      {/* Example: Use a hash or a sequence number if available, or keep short UUID */}
-      [{blockId.substring(0, 4)}] {/* Show partial ID */}
+      [{blockId.substring(0, 4)}]
     </button>
   );
 };
