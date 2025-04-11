@@ -53,6 +53,7 @@ export const QAChatInterface: React.FC<QAChatInterfaceProps> = ({
       if (resMetadataHeader) {
         try {
           const resMetadata = JSON.parse(resMetadataHeader);
+          console.log("Response metadata received:", resMetadata);
           setLastResponseMetadata(resMetadata);
           if (resMetadata.conversationId && !conversationId) {
             setConversationId(resMetadata.conversationId);
@@ -114,15 +115,18 @@ export const QAChatInterface: React.FC<QAChatInterfaceProps> = ({
       citationMap.set(citation.blockId, citation);
     });
 
+    // Remove commas adjacent to citation markers
+    let cleanedContent = content.replace(/,\s*\[cell:/g, " [cell:");
+    cleanedContent = cleanedContent.replace(/\]\s*,/g, "] ");
+
     const regex = /\[cell:([a-fA-F0-9-]+)\]/g;
     const parts = [];
     let lastIndex = 0;
     let match;
-    let tempContent = content;
 
-    while ((match = regex.exec(tempContent)) !== null) {
+    while ((match = regex.exec(cleanedContent)) !== null) {
       if (match.index > lastIndex) {
-        const textPart = tempContent.substring(lastIndex, match.index);
+        const textPart = cleanedContent.substring(lastIndex, match.index);
         parts.push({
           type: "text",
           content: textPart
@@ -139,10 +143,10 @@ export const QAChatInterface: React.FC<QAChatInterfaceProps> = ({
       lastIndex = match.index + match[0].length;
     }
 
-    if (lastIndex < tempContent.length) {
+    if (lastIndex < cleanedContent.length) {
       parts.push({
         type: "text",
-        content: tempContent.substring(lastIndex)
+        content: cleanedContent.substring(lastIndex)
       });
     }
 
@@ -192,18 +196,21 @@ export const QAChatInterface: React.FC<QAChatInterfaceProps> = ({
                 {renderMessageContent(msg.id, msg.content)}
               </div>
 
-              {msg.role === "assistant" && messageMetadata[msg.id]?.steps && (
-                <details className='text-xs mt-2 text-gray-400 cursor-pointer'>
-                  <summary>
-                    Agent Steps ({messageMetadata[msg.id]?.steps?.length})
-                  </summary>
-                  <ul className='list-disc pl-4 mt-1'>
-                    {messageMetadata[msg.id]?.steps?.map((step, i) => (
-                      <li key={i}>{step}</li>
-                    ))}
-                  </ul>
-                </details>
-              )}
+              {msg.role === "assistant" &&
+                messageMetadata[msg.id]?.steps &&
+                messageMetadata[msg.id].steps!.length > 0 && (
+                  <details className='text-xs mt-2 text-gray-400 cursor-pointer'>
+                    <summary>
+                      Agent Steps ({messageMetadata[msg.id]?.steps?.length || 0}
+                      )
+                    </summary>
+                    <ul className='list-disc pl-4 mt-1'>
+                      {messageMetadata[msg.id]?.steps?.map((step, i) => (
+                        <li key={i}>{step}</li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
             </div>
           </div>
         ))}
