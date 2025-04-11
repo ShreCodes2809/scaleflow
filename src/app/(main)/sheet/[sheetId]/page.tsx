@@ -90,14 +90,11 @@ export default async function SheetPage({
     // You can handle errors in different ways server-side
     console.error("Server error fetching sheet data:", error);
 
-    // Option 1: Return an error UI
     return (
       <div className='flex justify-center items-center min-h-screen bg-[#121212] text-red-400'>
         Error loading sheet data. Please try again later.
       </div>
     );
 
-    // Option 2: Throw to Next.js error boundary
-    // throw new Error("Failed to load sheet data");
   }
 }

@@ -207,15 +207,17 @@ export const QAChatInterface: React.FC<QAChatInterfaceProps> = ({
                 {renderMessageContent(msg.id, msg.content)}
               </div>
 
-              {msg.role === "assistant" && messageMetadata[msg.id] && (
+              {msg.role === "assistant" && lastResponseMetadata && (
                 <details className='text-xs mt-2 text-gray-400 cursor-pointer'>
                   <summary>
-                    Agent Steps ({messageMetadata[msg.id]?.steps?.length || 0})
+                    Agent Steps ({lastResponseMetadata?.steps?.length || 0})
                   </summary>
                   <ul className='list-disc pl-4 mt-1'>
-                    {messageMetadata[msg.id]?.steps?.map((step, index) => (
-                      <li key={index}>{step}</li>
-                    ))}
+                    {lastResponseMetadata?.steps?.map(
+                      (step: string, index: number) => (
+                        <li key={index}>{step}</li>
+                      )
+                    )}
                   </ul>
                 </details>
               )}
