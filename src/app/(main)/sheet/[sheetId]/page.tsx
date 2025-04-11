@@ -71,9 +71,9 @@ async function getSheetData(
 export default async function SheetPage({
   params
 }: {
-  params: { sheetId: string };
+  params: Promise<{ sheetId: string }>;
 }) {
-  const { sheetId } = params;
+  const { sheetId } = await params;
   const orgId = "rc_org_1";
 
   try {
