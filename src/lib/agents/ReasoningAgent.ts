@@ -24,7 +24,6 @@ const RetrievalPlanSchema = z
   })
   .refine(
     (data) => {
-      // console.log("Retrieval Plan Data to be validated:", data); // Keep for debugging if needed
       // If type is 'specific', blockIds MUST be present and non-empty
       if (data.type === "specific") {
         return data.blockIds && data.blockIds.length > 0;
@@ -73,7 +72,7 @@ export class ReasoningAgent {
   ): Promise<{ plan: RetrievalPlan[]; thoughts: string[] }> {
     console.log("Reasoning Agent Plan Retrieval:", userQuery, sheetContext);
 
-    // --- *** UPDATED SYSTEM PROMPT *** ---
+    // --- *** UPDATED SYSTEM PROMPT WITH IMPROVED COLUMN UNDERSTANDING *** ---
     const systemPrompt = `
 You are an expert reasoning agent analyzing user queries about data in a table (sheet).
 Your goal is to break down the user's query into a structured plan of steps to retrieve the necessary information from the sheet using the available methods.
@@ -82,26 +81,39 @@ Output *only* a valid JSON object containing two keys: "thoughts" (an array of s
 Sheet Context:
 - Sheet ID: ${sheetContext.sheetId}
 - Column Names: ${sheetContext.columnNames.join(", ")}
-- Available Row IDs: ${sheetContext.rowIds.join(", ")} (Total: ${
-      sheetContext.rowIds.length
-    })
-    ${
-      sheetContext.rowIds.length > 20
-        ? `(Showing first 20: ${sheetContext.rowIds.slice(0, 20).join(", ")})`
-        : ""
+- Available Row IDs: ${
+      sheetContext.rowIds.length > 0
+        ? `${sheetContext.rowIds.length} rows available`
+        : "No rows available"
     }
+${
+  sheetContext.rowIds.length > 0
+    ? `(First row ID sample: ${sheetContext.rowIds[0]})`
+    : ""
+}
+
+IMPORTANT COLUMN STRUCTURE UNDERSTANDING:
+Based on the column names, here's how to interpret the data:
+- "Product Portfolios": The type of product or service category (e.g., "Research")
+- "URL": Website link for the company
+- "Company": Company name (e.g., "Company One", "Company Two")
+- "Country": Country code where the company is located (e.g., "USA", "CAN")
+- "Web Traffic": Numeric value indicating website visitors
+- "People Count": Numeric value showing number of employees
+- "Total Raised": Numeric value of funding raised (in currency)
+- "Last Funding Round": Type of funding round (e.g., "SEED", "SERIES_A")
+- "Base Data": Additional metadata
+
+For queries about funding, trends, maximums, or minimums, focus on:
+- "Total Raised" for funding amount questions
+- "Last Funding Round" for funding stage questions
+- "People Count" for team size questions
+- "Web Traffic" for visitor metrics
 
 Your first task is to analyze the column structure to understand:
-1. Which columns represent entity identifiers (e.g., IDs, names, codes)
-2. Which columns contain attributes or values about those entities
-3. What relationships exist between columns
-
-Based on this analysis, determine:
-- What columns are relevant to the user's query
-- Which rows might contain the answer
-- What retrieval strategy will preserve the relationships between related data
-
-Now,
+1. Which columns represent entity identifiers (e.g., Company, URL)
+2. Which columns contain numeric values (e.g., Total Raised, People Count, Web Traffic)
+3. Which columns contain categorical data (e.g., Country, Last Funding Round)
 
 Available Retrieval Methods & Rules for the 'plan' array:
 Each object in the 'plan' array MUST have 'type', 'filters', and 'reasoning'.
@@ -110,11 +122,9 @@ Each object in the 'plan' array MUST have 'type', 'filters', and 'reasoning'.
 - Contains optional 'rowIds' (array of strings) and 'columnIds' (array of strings).
 - 'columnIds': Specify column names to restrict the search to those columns. Use column names exactly as provided in 'Column Names' context.
 - 'rowIds':
-    - Analyze the user query and conversation history. If the query targets specific rows (e.g., by name, index, previous mention, or a characteristic that implies a row subset), identify the corresponding UUIDs from the 'Available Row IDs' context and include them in the 'filters.rowIds' array.
-    - Only use UUIDs present in the 'Available Row IDs' context.
-    - If the query applies broadly to *all* rows within the specified columns (or doesn't specify a row subset), use 'rowIds': ["*"] to indicate searching across all relevant rows.
-    - If no retrieval step is needed at all (e.g., query answered from context), the 'plan' array will be empty, and filters are irrelevant.
-- Filters refine the search space for 'semantic' and 'keyword' types. They do NOT replace the need for a 'query' or 'keywords'.
+    - For most queries, especially those about maximums, minimums, or trends, use 'rowIds': ["*"] to search across ALL rows.
+    - If the query targets specific rows (e.g., by name, index, previous mention), identify the corresponding UUIDs and include them.
+    - If the query applies broadly to all rows, use 'rowIds': ["*"].
 
 **Retrieval Types:**
 1.  'semantic': Finds cells conceptually similar to a query.
@@ -125,36 +135,44 @@ Each object in the 'plan' array MUST have 'type', 'filters', and 'reasoning'.
     - Use for: Exact term matches, known identifiers, specific numbers within cell text.
     - Requires: 'keywords' (array of strings).
     - Optional: 'filters' (rowIds, columnIds) to narrow the search.
-3.  'specific': Retrieves specific blocks (usually cells) ONLY if their exact UUIDs are ALREADY KNOWN (e.g., from a previous step or context).
+3.  'specific': Retrieves specific blocks (usually cells) ONLY if their exact UUIDs are ALREADY KNOWN.
     - Use for: Getting full details of a block whose UUID you possess.
     - Requires: 'blockIds' (array of valid UUID strings).
-    - Optional: 'filters' (columnIds - rowIds are implicitly defined by blockIds, but can be included for clarity if desired, usually as ["*"] or the specific row(s) the blocks belong to).
-    - CRITICAL: The 'blockIds' field MUST contain ONLY valid UUID strings from previous context/steps. Do NOT guess UUIDs.
-    - CRITICAL: Do NOT use type 'specific' if you do not have the exact UUID(s).
+    - Optional: 'filters' (columnIds - rowIds are implicitly defined by blockIds).
+    - CRITICAL: The 'blockIds' field MUST contain ONLY valid UUID strings from previous context/steps.
 
-Handling Comparison/Aggregation Queries (Max, Min, Sum, Average):
-- Queries like "highest", "lowest", "total", "average" require retrieving the relevant data points first. The actual calculation happens *after* retrieval.
-- To retrieve the necessary data:
-    - Identify the column containing the values (e.g., 'Population').
-    - Use a 'semantic' or 'keyword' step to retrieve cells from that column. Filter by that column name in 'filters.columnIds'.
-    - Since these queries usually apply to all relevant rows unless specified otherwise, use 'filters.rowIds': ["*"].
-- Example Goal: Find the country with the highest 'Population'.
-- Example Plan Step:
-    {
-        "type": "semantic",
-        "query": "population figures", // Query representing the concept
-        "filters": { "columnIds": ["Population"], "rowIds": ["*"] }, // Filter to the relevant column, all rows
-        "reasoning": "Retrieve all cells from the 'Population' column across all relevant rows to find the maximum value later."
-    }
+CRITICAL FOR NUMERICAL QUERIES (MAX/MIN/TRENDS):
+- For questions about "maximum", "highest", "top", "largest", "minimum", "lowest", etc.:
+  1. ALWAYS use rowIds: ["*"] to retrieve ALL rows
+  2. Include ALL relevant columns that might contain the values
+  3. For funding related queries, ALWAYS include "Total Raised" and "Last Funding Round" columns
+  4. For people/team size queries, ALWAYS include "People Count" and "Company" columns
+  5. For traffic metrics, ALWAYS include "Web Traffic" and "Company" columns
+  6. For trend analysis, include ALL rows and the relevant column(s)
 
-Multi-Step Planning:
-- If a query requires finding an item based on its properties (e.g., "the row with the highest value in 'Sales'"), first generate a step as described above to retrieve the relevant values (e.g., all 'Sales' figures using filters: { columnIds: ['Sales'], rowIds: ['*'] }).
-- The synthesis step will then analyze the retrieved evidence. A 'specific' step is usually NOT needed unless you first identify a specific row ID and then need *more* information from that *exact* row.
+- Example for "company with highest funding":
+  {
+    "type": "semantic",
+    "query": "company funding amounts",
+    "filters": { 
+      "rowIds": ["*"],  // <- CRITICAL: must retrieve ALL rows
+      "columnIds": ["Company", "Total Raised", "Last Funding Round"] 
+    },
+    "reasoning": "Need to retrieve all companies with their funding amounts to find the highest"
+  }
 
-Handling Queries Answerable from Context:
-- If the user's query can be answered *directly* from the 'Sheet Context' (e.g., column names, number of rows) and does *not* require searching cell data, the 'plan' array should be EMPTY ([]). Your 'thoughts' should explain this.
+- Example for "funding round trends":
+  {
+    "type": "semantic",
+    "query": "funding rounds and amounts for all companies",
+    "filters": { 
+      "rowIds": ["*"],
+      "columnIds": ["Company", "Total Raised", "Last Funding Round"] 
+    },
+    "reasoning": "Need all funding round data to analyze trends across different rounds"
+  }
 
-Output Format Reminder: Respond ONLY with the JSON object { "thoughts": [...], "plan": [...] }. Ensure the 'plan' array only contains objects matching the defined schema. If no retrieval is needed, 'plan' must be an empty array: []. Ensure all UUIDs used in 'filters.rowIds' (unless it's ["*"]) are present in the 'Available Row IDs' context.
+Output Format Reminder: Respond ONLY with the JSON object { "thoughts": [...], "plan": [...] }.
 `;
     // --- *** END UPDATED SYSTEM PROMPT *** ---
 
@@ -177,7 +195,7 @@ Output Format Reminder: Respond ONLY with the JSON object { "thoughts": [...], "
         throw new Error("Reasoning agent returned empty content.");
       }
 
-      console.log("Reasoning Agent Raw Response:", content); // Log raw response before parsing
+      console.log("Reasoning Agent Raw Response:", content);
 
       // --- VALIDATE WITH ZOD ---
       let parsedContent;
@@ -199,7 +217,7 @@ Output Format Reminder: Respond ONLY with the JSON object { "thoughts": [...], "
       if (!validationResult.success) {
         console.error(
           "Reasoning Agent Output Validation Error:",
-          validationResult.error.errors // Use .errors for detailed issues
+          validationResult.error.errors
         );
         console.error(
           "Problematic Parsed Content:",

@@ -213,7 +213,8 @@ export class MatrixQAService {
           request.messages[request.messages.length - 1].content,
           evidence,
           history,
-          schemaInfo
+          schemaInfo,
+          sheetContext
         );
 
         if (
@@ -246,6 +247,7 @@ export class MatrixQAService {
         finalAnswer = await this.synthesisAgent.synthesizeAnswer(
           request.messages[request.messages.length - 1].content,
           evidence,
+          sheetContext,
           history
         );
         steps.push(
@@ -631,7 +633,13 @@ export class MatrixQAService {
     query: string,
     evidence: Evidence[],
     history: any[],
-    schema: SchemaInfo
+    schema: SchemaInfo,
+    sheetContext: {
+      sheetId: string;
+      columnNames: string[];
+      rowIds: string[];
+      schema: SchemaInfo;
+    }
   ): Promise<{
     answer: string;
     needsMoreInfo: boolean;
@@ -713,6 +721,7 @@ export class MatrixQAService {
     const answer = await this.synthesisAgent.synthesizeAnswer(
       query,
       evidence,
+      sheetContext,
       history
     );
 

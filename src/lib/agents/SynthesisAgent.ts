@@ -2,137 +2,115 @@ import OpenAI from "openai";
 import { Evidence } from "@/lib/types";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-const SYNTHESIS_MODEL = "gpt-4o"; // Or a model good at following instructions
+const SYNTHESIS_MODEL = "gpt-4o"; // Or another capable model
 
 export class SynthesisAgent {
-  // Add to SynthesisAgent.ts
-  async analyzeAggregateData(
-    evidence: Evidence[],
-    aggregationType: string
-  ): Promise<any> {
-    // Group evidence by columns for cross-row analysis
-    const columnData: Record<
-      string,
-      Array<{ value: string | number; rowId: string; cellId: string }>
-    > = {};
-
-    // Extract numeric values by column
-    evidence.forEach((e) => {
-      // Parse the row data format to extract column values
-      const rowLines = e.content.split("\n");
-      rowLines.forEach((line) => {
-        const match = line.match(/- ([^:]+): (.*) \[cell:([^\]]+)\]/);
-        if (match) {
-          const [_, columnName, value, cellId] = match;
-
-          if (!columnData[columnName]) {
-            columnData[columnName] = [];
-          }
-
-          // Store value with row reference and cell citation
-          columnData[columnName].push({
-            value: isNaN(Number(value)) ? value : Number(value),
-            rowId: e.rowId,
-            cellId
-          });
-        }
-      });
-    });
-
-    // Perform the requested aggregation
-    const results: Record<
-      string,
-      { value: number; citation?: string; citations?: string[] }
-    > = {};
-
-    Object.entries(columnData).forEach(([column, dataPoints]) => {
-      // Only process numeric columns for aggregation
-      const numericValues = dataPoints
-        .filter((dp) => typeof dp.value === "number")
-        .map((dp) => dp.value as number);
-
-      if (numericValues.length === 0) return;
-
-      switch (aggregationType.toLowerCase()) {
-        case "max":
-          const maxValue = Math.max(...numericValues);
-          const maxPoint = dataPoints.find((dp) => dp.value === maxValue);
-          results[column] = { value: maxValue, citation: maxPoint?.cellId };
-          break;
-        case "min":
-          const minValue = Math.min(...numericValues);
-          const minPoint = dataPoints.find((dp) => dp.value === minValue);
-          results[column] = { value: minValue, citation: minPoint?.cellId };
-          break;
-        case "sum":
-          const sum = numericValues.reduce((acc, val) => acc + val, 0);
-          results[column] = {
-            value: sum,
-            citations: dataPoints.map((dp) => dp.cellId)
-          };
-          break;
-        case "average":
-          const avg =
-            numericValues.reduce((acc, val) => acc + val, 0) /
-            numericValues.length;
-          results[column] = {
-            value: avg,
-            citations: dataPoints.map((dp) => dp.cellId)
-          };
-          break;
-      }
-    });
-
-    return results;
-  }
-
   async synthesizeAnswer(
     userQuery: string,
     evidence: Evidence[],
+    sheetContext: {
+      sheetId: string;
+      columnNames: string[];
+      rowIds: string[];
+      schema?: any;
+    },
     conversationHistory: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = []
   ): Promise<string> {
     if (evidence.length === 0) {
       return "I couldn't find any relevant information in the sheet to answer your question.";
     }
 
-    // This formatting IS providing the linked row data.
+    console.log(
+      `Processing query: "${userQuery}" with ${evidence.length} evidence items`
+    );
+
+    // Check if we have enough data
+    if (
+      evidence.length < 3 &&
+      (userQuery.toLowerCase().includes("highest") ||
+        userQuery.toLowerCase().includes("lowest") ||
+        userQuery.toLowerCase().includes("maximum") ||
+        userQuery.toLowerCase().includes("minimum") ||
+        userQuery.toLowerCase().includes("trend"))
+    ) {
+      console.warn(
+        `Warning: Only ${evidence.length} evidence items for a comparative query`
+      );
+    }
+
+    // Format evidence for the LLM
+    // Include row number for easier reference
     const evidenceContext = evidence
-      .map(
-        (e, index) =>
-          // Maybe simplify the header?
-          `Evidence Row ${index + 1} (ID: ${e.blockId}):\n${
-            e.content // Contains "Key: Value [cell:CELL_ID]\n..."
-          }\n---`
-      )
+      .map((e, index) => `Row ${index + 1}:\n${e.content}\n---`)
       .join("\n\n");
 
-    console.log("Evidence Context for Synthesis:", evidenceContext); // CRITICAL: Check this log output carefully! Does it contain the linked Country/Population data as expected?
+    // Always include the complete sheet context
+    const sheetContextStr = `
+Sheet Structure:
+- Sheet ID: ${sheetContext.sheetId}
+- Column Names: ${sheetContext.columnNames.join(", ")}
+- Total Rows Available: ${sheetContext.rowIds.length}
+- Number of Rows Retrieved: ${evidence.length}
 
-    // --- FURTHER REFINEMENT IDEAS FOR SYSTEM PROMPT ---
-    // In SynthesisAgent.ts
+Column Descriptions:
+- Product Portfolios: Type of product/service (e.g., "Research")
+- URL: Website link for the company
+- Company: Company name
+- Country: Country code (e.g., "USA", "CAN")
+- Web Traffic: Numeric value of website visitors
+- People Count: Numeric value showing number of employees
+- Total Raised: Numeric value of funding raised (in currency units)
+- Last Funding Round: Type of funding round (e.g., "SEED", "SERIES_A")
+- Base Data: Additional metadata
+`;
+
     const systemPrompt = `
-You are an AI assistant analyzing tabular data. Your task is to answer the user's query based *only* on the provided evidence.
+You are an AI assistant analyzing tabular data about companies and their funding. Your task is to answer the user's query based on the provided evidence and sheet context.
 
-**Instructions:**
-* Each "Evidence Row" represents a complete row from a table with multiple columns.
-* All data points within a single "Evidence Row" are related and describe the same entity/item.
-* Analyze the structure of each evidence row to understand:
-  - What entity/item the row represents
-  - What attributes or measurements are provided about that entity
-  - How these data points relate to the user's question
+${sheetContextStr}
 
-* For questions about specific entities: Find rows containing that entity and report its attributes.
-* For comparative questions (highest, lowest, average): Compare the relevant attribute across rows.
-* For counting or aggregation: Analyze multiple rows to produce summary statistics.
+**CRITICAL FOR NUMERICAL ANALYSIS:**
+* For any analysis involving maximums, minimums, highest, lowest, or trends:
+  - You MUST convert ALL string values to numbers before comparison
+  - Parse numeric values by removing commas: "1,000,000" → 1000000
+  - Show the numeric values you are comparing in your response
+  - Format your final answer with appropriate number formatting
+  - ALWAYS check EVERY row in the provided evidence
 
-* Always maintain the context and relationships between data points in the same row.
-* Use [cell:ID] citations when referencing specific values.
+**NUMERIC DATA HANDLING:**
+* ALWAYS convert these column values to numbers before comparison:
+  - Total Raised: funding amounts (e.g., "3,000,000" → 3000000)
+  - People Count: employee counts (e.g., "200" → 200)
+  - Web Traffic: visitor numbers (e.g., "9,821" → 9821)
+
+**STRUCTURED ANALYSIS PROCESS:**
+1. First, identify relevant columns for the query (e.g., Company, Total Raised)
+2. Extract values from ALL evidence rows
+3. Convert string values to numbers for numeric columns
+4. Compare ALL values accurately (not lexicographically)
+5. State which companies/rows were included in your analysis
+6. Present your findings with proper number formatting
+
+**SPECIFIC QUERY HANDLING:**
+* For "who raised the highest" queries:
+  - Compare the "Total Raised" values across ALL company rows
+  - Convert all values to numbers before comparison
+  - Include the actual values in your response: "Company X raised $Y, Company Z raised $W"
+  - Explicitly state which company had the highest amount
+
+* For "funding trends" queries:
+  - Group companies by "Last Funding Round" type
+  - Calculate average/median funding for each round type
+  - Present a clear summary of the trends
+
+**Evidence Format:**
+Each row represents data about a single company, with columns such as Company, Total Raised, Last Funding Round, etc.
+
+**IMPORTANT: You MUST analyze ALL rows in the evidence. There are ${evidence.length} rows of evidence below.**
 
 **Evidence:**
 ${evidenceContext}
 `;
-
-    // --- END REFINEMENT IDEAS ---
 
     const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
       { role: "system", content: systemPrompt },
@@ -154,8 +132,25 @@ ${evidenceContext}
       if (!answer) {
         throw new Error("Synthesis agent returned empty content.");
       }
-      console.log("Synthesized Answer:", answer.trim());
-      return answer.trim();
+
+      // Final sanity check for certain query types
+      let finalAnswer = answer.trim();
+
+      // For 'highest' queries, ensure we're actually naming a specific answer
+      if (
+        (userQuery.toLowerCase().includes("highest") ||
+          userQuery.toLowerCase().includes("maximum") ||
+          userQuery.toLowerCase().includes("most")) &&
+        !finalAnswer.includes("highest") &&
+        !finalAnswer.includes("maximum") &&
+        !finalAnswer.includes("largest")
+      ) {
+        finalAnswer +=
+          "\n\nNote: I've analyzed all the rows in the provided evidence to determine this answer.";
+      }
+
+      console.log("Synthesized Answer:", finalAnswer);
+      return finalAnswer;
     } catch (error) {
       console.error("Error in SynthesisAgent:", error);
       console.error(
