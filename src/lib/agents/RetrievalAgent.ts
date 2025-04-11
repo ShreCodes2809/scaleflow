@@ -240,7 +240,7 @@ export class RetrievalAgent {
       });
 
       // Collect company name for better row identification
-      let companyName = "Unknown Company";
+      let companyName = "";
       const companyCell = rowCells.find(
         (cell) => cell.properties?.column?.name === "Company"
       );

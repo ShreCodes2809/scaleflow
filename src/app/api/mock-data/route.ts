@@ -381,7 +381,7 @@ export async function POST(request: NextRequest) {
 
     // Process each row to create both row-level and cell-level embeddings
     for (const row of rowsData) {
-      const companyName = row.rowData["Company"] || "Unknown Company";
+      const companyName = row.rowData["Company"] || "";
 
       // 1. Create a consolidated row text for row-level embedding
       const rowText = generateRowText(row.rowData, companyName);
