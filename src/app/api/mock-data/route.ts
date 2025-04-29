@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
 import { BlockService } from "@/lib/services/BlockService";
 import { EmbeddingService } from "@/lib/services/EmbeddingService";
 import {
@@ -16,246 +15,262 @@ import {
 } from "@/lib/types";
 import { v4 as uuidv4 } from "uuid";
 
-// --- Mock Data Generation Logic ---
-const generateMockData = (numRows: number) => {
-  // Define possible values for each column based on the screenshot
-  const productPortfolios = ["Research"];
-  const urls = [
-    "https://company1.com",
-    "https://company2.com",
-    "https://company3.com",
-    "https://company4.com",
-    "https://company5.com",
-    "not_a_url",
-    "12345"
-  ];
-  const companyNames = [
-    "Company One",
-    "Company Two",
-    "Company Three",
-    "Company Four",
-    "Company Five",
-    ""
-  ];
-  const countries = ["CAN", "DEU", "USA", "GBR", "AUS"];
-  const webTrafficValues = [7423, 9821, 10321, 8745, 12500];
-  const peopleCounts = [35, 50, 90, 120, 200, 393];
-  const totalRaisedValues = [3000000, 5000000, 7000000, 8500000, 12000000];
-  const fundingRounds = ["PRE_SEED", "SEED", "SERIES_A", "SERIES_B", "GRANT"];
+const reporters = [
+  { code: 36, iso: "AUS", desc: "Australia" },
+  { code: 842, iso: "USA", desc: "United States" },
+  { code: 124, iso: "CAN", desc: "Canada" },
+  { code: 826, iso: "GBR", desc: "United Kingdom" },
+  { code: 276, iso: "DEU", desc: "Germany" }
+];
 
-  // Define columns based on the screenshot
+const partners = [
+  { code: 156, iso: "CHN", desc: "China" },
+  { code: 392, iso: "JPN", desc: "Japan" },
+  { code: 410, iso: "KOR", desc: "South Korea" },
+  { code: 842, iso: "USA", desc: "United States" },
+  { code: 276, iso: "DEU", desc: "Germany" },
+  { code: 0, iso: "WLD", desc: "World" }
+];
+
+const commodities = [
+  { code: "0101", desc: "Live horses, asses, mules and hinnies" },
+  { code: "1001", desc: "Wheat and meslin" },
+  { code: "2701", desc: "Coal; briquettes, ovoids and similar solid fuels" },
+  { code: "7108", desc: "Gold (including gold plated with platinum)" },
+  { code: "8517", desc: "Telephone sets, incl. smartphones" },
+  { code: "TOTAL", desc: "All Commodities" }
+];
+
+const flows = [
+  { code: "M", desc: "Import" },
+  { code: "X", desc: "Export" }
+];
+
+const generateMockComtradeData = (numRows: number) => {
   const columns = [
-    { name: "Product Portfolios", type: "text" },
-    { name: "URL", type: "text" },
-    { name: "Company", type: "text" },
-    { name: "Country", type: "text" },
-    { name: "Web Traffic", type: "number" },
-    { name: "People Count", type: "number" },
-    { name: "Total Raised", type: "number" },
-    { name: "Last Funding Round", type: "text" },
-    { name: "Base Data", type: "text" }
+    { name: "typeCode", type: "text" },
+    { name: "freqCode", type: "text" },
+    { name: "refPeriodId", type: "text" },
+    { name: "refYear", type: "number" },
+    { name: "refMonth", type: "number" },
+    { name: "period", type: "text" },
+    { name: "reporterCode", type: "number" },
+    { name: "reporterISO", type: "text" },
+    { name: "reporterDesc", type: "text" },
+    { name: "flowCode", type: "text" },
+    { name: "flowDesc", type: "text" },
+    { name: "partnerCode", type: "number" },
+    { name: "partnerISO", type: "text" },
+    { name: "partnerDesc", type: "text" },
+    { name: "classificationCode", type: "text" },
+    { name: "cmdCode", type: "text" },
+    { name: "cmdDesc", type: "text" },
+    { name: "aggrLevel", type: "number" },
+    { name: "qtyUnitCode", type: "number" },
+    { name: "qtyUnitAbbr", type: "text" },
+    { name: "qty", type: "number" },
+    { name: "netWgt", type: "number" },
+    { name: "cifvalue", type: "number" },
+    { name: "fobvalue", type: "number" },
+    { name: "primaryValue", type: "number" },
+    { name: "isReported", type: "boolean" },
+    { name: "isAggregate", type: "boolean" }
   ];
 
   const rows = [];
-  for (let i = 0; i < numRows; i++) {
-    const rowData: { [key: string]: string | number | null } = {};
+  const baseYear = 2023;
+  const baseMonth = 11;
 
-    // Generate consistent company data
-    const companyIndex = i % companyNames.length;
-    const countryIndex = i % countries.length;
+  for (let i = 0; i < numRows; i++) {
+    const reporter = reporters[i % reporters.length];
+    const partner = partners[i % partners.length];
+    const commodity = commodities[i % commodities.length];
+    const flow = flows[i % flows.length];
+    const isAggregate = partner.code === 0 || commodity.code === "TOTAL";
+
+    const qty = isAggregate ? 0 : Math.floor(Math.random() * 100000) + 100;
+    const netWgt = isAggregate
+      ? 0
+      : Math.floor(qty * (Math.random() * 0.5 + 0.8));
+    const fobValue = isAggregate
+      ? Math.floor(Math.random() * 50000000) + 100000
+      : Math.floor(qty * (Math.random() * 50 + 10));
+    const cifValueFactor = flow.code === "M" ? 1.05 + Math.random() * 0.1 : 1.0;
+    const cifValue = isAggregate
+      ? Math.floor(fobValue * cifValueFactor)
+      : Math.floor(fobValue * cifValueFactor);
+
+    const rowData: { [key: string]: string | number | boolean | null } = {
+      typeCode: "C",
+      freqCode: "M",
+      refPeriodId: `${baseYear}${String(baseMonth).padStart(2, "0")}01`,
+      refYear: baseYear,
+      refMonth: baseMonth,
+      period: `${baseYear}${String(baseMonth).padStart(2, "0")}`,
+      reporterCode: reporter.code,
+      reporterISO: reporter.iso,
+      reporterDesc: reporter.desc,
+      flowCode: flow.code,
+      flowDesc: flow.desc,
+      partnerCode: partner.code,
+      partnerISO: partner.iso,
+      partnerDesc: partner.desc,
+      classificationCode: "H6",
+      cmdCode: commodity.code,
+      cmdDesc: commodity.desc,
+      aggrLevel: commodity.code === "TOTAL" ? 0 : commodity.code.length,
+      qtyUnitCode: 8,
+      qtyUnitAbbr: "kg",
+      qty: qty,
+      netWgt: Math.random() > 0.1 ? netWgt : null,
+      cifvalue: Math.random() > 0.1 ? cifValue : null,
+      fobvalue: fobValue,
+      primaryValue: flow.code === "M" ? cifValue : fobValue,
+      isReported: !isAggregate,
+      isAggregate: isAggregate
+    };
 
     columns.forEach((col) => {
-      if (col.name === "Product Portfolios") {
-        rowData[col.name] = productPortfolios[0];
-      } else if (col.name === "URL") {
-        rowData[col.name] = urls[i % urls.length];
-      } else if (col.name === "Company") {
-        rowData[col.name] = companyNames[companyIndex];
-      } else if (col.name === "Country") {
-        rowData[col.name] = countries[countryIndex];
-      } else if (col.name === "Web Traffic") {
-        // Some rows might not have web traffic data
-        rowData[col.name] =
-          Math.random() > 0.1
-            ? webTrafficValues[i % webTrafficValues.length]
-            : null;
-      } else if (col.name === "People Count") {
-        rowData[col.name] = peopleCounts[i % peopleCounts.length];
-      } else if (col.name === "Total Raised") {
-        rowData[col.name] = totalRaisedValues[i % totalRaisedValues.length];
-      } else if (col.name === "Last Funding Round") {
-        rowData[col.name] = fundingRounds[i % fundingRounds.length];
-      } else if (col.name === "Base Data") {
-        rowData[col.name] = "{}"; // Based on the symbol in screenshot, appears to be empty data
+      if (!(col.name in rowData)) {
+        rowData[col.name] = null;
       }
     });
+
     rows.push(rowData);
   }
 
   return { columns, rows };
 };
-// --- ---
 
-// --- Helper for creating rich text representations ---
-const formatCurrency = (amount: number) => {
+const formatValue = (value: number | null | undefined): string => {
+  if (value === null || value === undefined) return "N/A";
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
     maximumFractionDigits: 0
-  }).format(amount);
+  }).format(value);
 };
 
-// Add country code to full name mapping
-const countryNames: { [key: string]: string } = {
-  AUS: "Australia",
-  USA: "United States",
-  CAN: "Canada",
-  GBR: "United Kingdom",
-  DEU: "Germany"
+const formatQuantity = (
+  value: number | null | undefined,
+  unit: string | null | undefined
+): string => {
+  if (value === null || value === undefined) return "N/A";
+  const unitStr = unit ? ` ${unit}` : "";
+  return `${value.toLocaleString()}${unitStr}`;
 };
 
-const getFullCountryName = (countryCode: string) => {
-  return countryNames[countryCode] || countryCode;
-};
+const generateRowText = (rowData: any): string => {
+  const flow = rowData["flowDesc"] || rowData["flowCode"];
+  const reporter =
+    rowData["reporterDesc"] || `Reporter ${rowData["reporterCode"]}`;
+  const partner = rowData["partnerDesc"] || `Partner ${rowData["partnerCode"]}`;
+  const commodity = rowData["cmdDesc"] || `Commodity ${rowData["cmdCode"]}`;
+  const year = rowData["refYear"];
+  const month = new Date(0, (rowData["refMonth"] || 1) - 1).toLocaleString(
+    "default",
+    { month: "long" }
+  );
 
-const generateRowText = (rowData: any, companyName: string) => {
-  // Create a text representation of the entire row
-  let text = `Information about ${companyName || "a company"}: `;
-
-  if (rowData["Country"]) {
-    const countryName = getFullCountryName(rowData["Country"]);
-    text += `Located in ${countryName} (${rowData["Country"]}). `;
-
-    // Add explicit geographic context for search
-    if (rowData["Total Raised"]) {
-      const amount =
-        typeof rowData["Total Raised"] === "number"
-          ? formatCurrency(rowData["Total Raised"])
-          : rowData["Total Raised"];
-      text += `Part of the ${countryName} funding ecosystem with ${amount} raised. `;
-    }
+  let text = `Transaction record for ${month} ${year}: ${reporter} ${flow} of ${commodity}`;
+  if (partner !== "World") {
+    text += ` ${flow === "Import" ? "from" : "to"} ${partner}.`;
+  } else {
+    text += ` (aggregated across partners).`;
   }
 
-  if (rowData["People Count"]) {
-    text += `Has ${rowData["People Count"]} employees. `;
-  }
+  const fob = formatValue(rowData["fobvalue"]);
+  const cif = formatValue(rowData["cifvalue"]);
+  const weight = formatQuantity(rowData["netWgt"], "kg");
+  const qty = formatQuantity(rowData["qty"], rowData["qtyUnitAbbr"]);
 
-  if (rowData["Web Traffic"]) {
-    text += `Receives ${rowData["Web Traffic"]} web visitors. `;
+  text += ` FOB Value: ${fob}.`;
+  if (rowData["cifvalue"] !== null) {
+    text += ` CIF Value: ${cif}.`;
   }
-
-  if (rowData["Total Raised"] && rowData["Last Funding Round"]) {
-    const amount =
-      typeof rowData["Total Raised"] === "number"
-        ? formatCurrency(rowData["Total Raised"])
-        : rowData["Total Raised"];
-    text += `Raised ${amount} in ${rowData["Last Funding Round"]} funding round. `;
-  } else if (rowData["Total Raised"]) {
-    const amount =
-      typeof rowData["Total Raised"] === "number"
-        ? formatCurrency(rowData["Total Raised"])
-        : rowData["Total Raised"];
-    text += `Raised ${amount}. `;
-  } else if (rowData["Last Funding Round"]) {
-    text += `Completed a ${rowData["Last Funding Round"]} funding round. `;
+  if (rowData["netWgt"] !== null) {
+    text += ` Net Weight: ${weight}.`;
   }
-
-  if (rowData["URL"] && rowData["URL"].startsWith("http")) {
-    text += `Website: ${rowData["URL"]}. `;
+  if (rowData["qty"] !== null && rowData["qtyUnitAbbr"] !== "kg") {
+    text += ` Quantity: ${qty}.`;
   }
-
-  // Add specific phrases to help with country-based querying
-  if (rowData["Country"]) {
-    const countryName = getFullCountryName(rowData["Country"]);
-    text += `This row contains funding data for a company in ${countryName}. `;
-    text += `Use this for analyzing ${countryName} funding trends. `;
-  }
+  text += ` Classification: ${rowData["classificationCode"]}. Aggregation Level: ${rowData["aggrLevel"]}.`;
+  text += ` Reported: ${rowData["isReported"]}, Aggregate: ${rowData["isAggregate"]}.`;
 
   return text.trim();
 };
 
 const generateCellContextualText = (
-  cellValue: string | number | null,
+  cellValue: string | number | boolean | null,
   columnName: string,
   rowData: any
-) => {
-  if (cellValue === null) return "";
+): string => {
+  if (cellValue === null || String(cellValue).trim() === "") return "";
 
-  const companyName = rowData["Company"] || "the company";
-  let countryInfo = "";
+  const flow = rowData["flowDesc"] || rowData["flowCode"];
+  const reporter =
+    rowData["reporterDesc"] || `Reporter ${rowData["reporterCode"]}`;
+  const partner = rowData["partnerDesc"] || `Partner ${rowData["partnerCode"]}`;
+  const commodity = rowData["cmdDesc"] || `Commodity ${rowData["cmdCode"]}`;
+  const timePeriod = `${new Date(
+    0,
+    (rowData["refMonth"] || 1) - 1
+  ).toLocaleString("default", { month: "short" })} ${rowData["refYear"]}`;
+  const transactionBase = `For the ${timePeriod} ${flow} of ${commodity} ${
+    flow === "Import" ? "from" : "to"
+  } ${partner} by ${reporter}`;
 
-  // Add country context to all cells
-  if (rowData["Country"]) {
-    const countryName = getFullCountryName(rowData["Country"]);
-    countryInfo = ` based in ${countryName}`;
+  switch (columnName) {
+    case "fobvalue":
+      return `${transactionBase}, the Free On Board (FOB) value was ${formatValue(
+        Number(cellValue)
+      )}.`;
+    case "cifvalue":
+      return `${transactionBase}, the Cost, Insurance, and Freight (CIF) value was ${formatValue(
+        Number(cellValue)
+      )}.`;
+    case "netWgt":
+      return `${transactionBase}, the net weight was ${formatQuantity(
+        Number(cellValue),
+        "kg"
+      )}.`;
+    case "qty":
+      return `${transactionBase}, the quantity reported was ${formatQuantity(
+        Number(cellValue),
+        rowData["qtyUnitAbbr"]
+      )}.`;
+    case "reporterDesc":
+      return `The reporting country for this transaction (${commodity} ${
+        flow === "Import" ? "from" : "to"
+      } ${partner}) was ${cellValue} (${rowData["reporterISO"]}).`;
+    case "partnerDesc":
+      return `The partner country for this transaction (${commodity} ${flow} by ${reporter}) was ${cellValue} (${rowData["partnerISO"]}).`;
+    case "cmdDesc":
+      return `The commodity traded (${flow} by ${reporter} ${
+        flow === "Import" ? "from" : "to"
+      } ${partner}) was ${cellValue} (Code: ${rowData["cmdCode"]}).`;
+    case "flowDesc":
+      return `This record represents an ${cellValue} transaction (${commodity} between ${reporter} and ${partner}).`;
+    default:
+      return `${transactionBase}, the value for ${columnName} was ${cellValue}.`;
   }
-
-  // Add context based on column type
-  if (columnName === "Total Raised") {
-    const fundingRound = rowData["Last Funding Round"] || "a funding round";
-    return `${companyName}${countryInfo} raised ${formatCurrency(
-      Number(cellValue)
-    )} in ${fundingRound}. This data point can be used for analyzing funding trends${
-      countryInfo ? " in " + getFullCountryName(rowData["Country"]) : ""
-    }.`;
-  }
-
-  if (columnName === "Last Funding Round") {
-    const amount = rowData["Total Raised"]
-      ? formatCurrency(Number(rowData["Total Raised"]))
-      : "funding";
-    return `${companyName}${countryInfo} completed a ${cellValue} round raising ${amount}. This shows the funding stage distribution${
-      countryInfo ? " in " + getFullCountryName(rowData["Country"]) : ""
-    }.`;
-  }
-
-  if (columnName === "People Count") {
-    return `${companyName}${countryInfo} has ${cellValue} employees. This shows company size${
-      countryInfo ? " in " + getFullCountryName(rowData["Country"]) : ""
-    }.`;
-  }
-
-  if (columnName === "Web Traffic") {
-    return `${companyName}${countryInfo} receives ${cellValue} visitors to their website. This shows popularity${
-      countryInfo
-        ? " of companies in " + getFullCountryName(rowData["Country"])
-        : ""
-    }.`;
-  }
-
-  if (columnName === "Country") {
-    const countryName = getFullCountryName(String(cellValue));
-    return `${companyName} is located in ${countryName} (${cellValue}). This data point can be used for geographic funding analysis in ${countryName}.`;
-  }
-
-  if (columnName === "Company") {
-    return `Information about ${cellValue}: a company${
-      countryInfo ? " based in " + getFullCountryName(rowData["Country"]) : ""
-    } in the database.`;
-  }
-
-  // Generic fallback
-  return `${columnName} for ${companyName}${countryInfo}: ${cellValue}`;
 };
-
-// --- ---
 
 export async function POST(request: NextRequest) {
   try {
     const requestBody = await request.json();
 
-    const numRows = requestBody.numRows ?? 100;
-    if (numRows > 1000) {
-      // Add limits
+    const numRows = requestBody.numRows ?? 500;
+    if (numRows > 5000) {
       return new NextResponse("Requested size too large", { status: 400 });
     }
 
-    console.log(`Generating mock data with ${numRows} rows...`);
+    console.log(`Generating mock UN Comtrade data with ${numRows} rows...`);
     const blockService = new BlockService();
     const embeddingService = new EmbeddingService();
-    const { columns: columnDefs, rows: rowData } = generateMockData(numRows);
+    const { columns: columnDefs, rows: rowData } =
+      generateMockComtradeData(numRows);
 
-    // 1. Create Sheet
     const sheet: Omit<
       SheetBlock,
       "id" | "created_at" | "updated_at" | "deleted_at"
@@ -263,15 +278,16 @@ export async function POST(request: NextRequest) {
       type: BlockTypeEnum.SHEET,
       parent_id: null,
       organization_id: "rc_org_1",
-      properties: { title: `Research Companies ${new Date().toISOString()}` },
-      content: [], // Will be populated later if needed, rely on parent_id
+      properties: {
+        title: `UN Comtrade Mock ${new Date().toISOString()}`
+      },
+      content: [],
       created_by: "rc_user_1"
     };
     const createdSheet = await blockService.createBlock(sheet as any);
     const sheetId = createdSheet.id;
     console.log(`Created sheet with ID: ${sheetId}`);
 
-    // 2. Create Columns
     const createdColumns: ColumnBlock[] = [];
     for (let i = 0; i < columnDefs.length; i++) {
       const colDef = columnDefs[i];
@@ -291,8 +307,6 @@ export async function POST(request: NextRequest) {
     }
     console.log(`Created ${createdColumns.length} columns`);
 
-    // 3. Create Rows and Cells
-    // Store cells by row for later embedding generation
     const rowsData: {
       rowId: string;
       rowData: any;
@@ -300,13 +314,14 @@ export async function POST(request: NextRequest) {
         cellId: string;
         columnId: string;
         columnName: string;
-        value: string | number | null;
+        value: string | number | boolean | null;
       }[];
     }[] = [];
 
     let totalCellsCreated = 0;
 
     for (const data of rowData) {
+      const rowName = `${data["reporterISO"]}-${data["partnerISO"]}-${data["cmdCode"]}-${data["period"]}`;
       const row: Omit<
         RowBlock,
         "id" | "created_at" | "updated_at" | "deleted_at"
@@ -314,14 +329,13 @@ export async function POST(request: NextRequest) {
         type: BlockTypeEnum.ROW,
         parent_id: sheetId,
         organization_id: "rc_org_1",
-        properties: { name: String(data["Company"] || "") },
+        properties: { name: rowName },
         content: null,
         created_by: "rc_user_1"
       };
       const createdRow = await blockService.createBlock(row as any);
       const rowId = createdRow.id;
 
-      // Track row and its cells
       const rowEntry: {
         rowId: string;
         rowData: any;
@@ -329,7 +343,7 @@ export async function POST(request: NextRequest) {
           cellId: string;
           columnId: string;
           columnName: string;
-          value: string | number | null;
+          value: string | number | boolean | null;
         }[];
       } = {
         rowId,
@@ -338,10 +352,7 @@ export async function POST(request: NextRequest) {
       };
 
       for (const column of createdColumns) {
-        const cellValue =
-          data[column.properties.name] !== null
-            ? String(data[column.properties.name] || "")
-            : null;
+        const cellValue = data[column.properties.name];
         const cell: Omit<
           CellBlock,
           "id" | "created_at" | "updated_at" | "deleted_at"
@@ -359,34 +370,25 @@ export async function POST(request: NextRequest) {
         const createdCell = await blockService.createBlock(cell as any);
         totalCellsCreated++;
 
-        // Track cell in the row entry
         rowEntry.cells.push({
           cellId: createdCell.id,
           columnId: column.id,
           columnName: column.properties.name,
-          value: data[column.properties.name]
+          value: cellValue
         });
       }
-
       rowsData.push(rowEntry);
     }
     console.log(
       `Created ${rowsData.length} rows with ${totalCellsCreated} total cells`
     );
 
-    // 4. Generate and Upsert Embeddings - NEW APPROACH
-    console.log("Preparing embeddings with row-level context...");
+    console.log("Preparing embeddings with transaction context...");
     const cellsToEmbed: { text: string; metadata: PineconeMetadata }[] = [];
     const rowsToEmbed: { text: string; metadata: PineconeMetadata }[] = [];
 
-    // Process each row to create both row-level and cell-level embeddings
     for (const row of rowsData) {
-      const companyName = row.rowData["Company"] || "";
-
-      // 1. Create a consolidated row text for row-level embedding
-      const rowText = generateRowText(row.rowData, companyName);
-
-      // Create row-level embedding
+      const rowText = generateRowText(row.rowData);
       rowsToEmbed.push({
         text: rowText,
         metadata: {
@@ -394,21 +396,36 @@ export async function POST(request: NextRequest) {
           rowId: row.rowId,
           sheetId: sheetId,
           orgId: "rc_org_1",
-          contentSnippet: rowText.substring(0, 100),
+          contentSnippet: rowText.substring(0, 150),
           isRowLevel: true,
-          // Include all column IDs associated with this row for filtering
           columnIds: row.cells.map((cell) => cell.columnId),
-          // Include key data for quick filtering
-          companyName: companyName,
-          country: row.rowData["Country"],
-          fundingRound: row.rowData["Last Funding Round"]
+
+          reporterISO: String(row.rowData["reporterISO"] || ""),
+          partnerISO: String(row.rowData["partnerISO"] || ""),
+          cmdCode: String(row.rowData["cmdCode"] || ""),
+          flowCode: String(row.rowData["flowCode"] || ""),
+          refYear: Number(row.rowData["refYear"]),
+          refMonth: Number(row.rowData["refMonth"]),
+          isAggregate: Boolean(row.rowData["isAggregate"])
         }
       });
 
-      // 2. Create contextual cell-level embeddings
       for (const cell of row.cells) {
-        if (cell.value !== null && String(cell.value).trim() !== "") {
-          // Generate contextual text for this cell
+        const importantColumns = [
+          "reporterDesc",
+          "partnerDesc",
+          "cmdDesc",
+          "flowDesc",
+          "fobvalue",
+          "cifvalue",
+          "netWgt",
+          "qty"
+        ];
+        if (
+          cell.value !== null &&
+          String(cell.value).trim() !== "" &&
+          importantColumns.includes(cell.columnName)
+        ) {
           const contextualText = generateCellContextualText(
             cell.value,
             cell.columnName,
@@ -421,15 +438,20 @@ export async function POST(request: NextRequest) {
               metadata: {
                 blockId: cell.cellId,
                 rowId: row.rowId,
-                columnIds: row.cells.map((cell) => cell.columnId),
+                columnIds: [cell.columnId],
                 sheetId: sheetId,
                 orgId: "rc_org_1",
-                contentSnippet: contextualText.substring(0, 100),
+                contentSnippet: contextualText.substring(0, 150),
                 columnName: cell.columnName,
-                // Include related column values for better filtering
-                companyName: companyName,
-                country: row.rowData["Country"],
-                fundingRound: row.rowData["Last Funding Round"]
+                isRowLevel: false,
+
+                reporterISO: String(row.rowData["reporterISO"] || ""),
+                partnerISO: String(row.rowData["partnerISO"] || ""),
+                cmdCode: String(row.rowData["cmdCode"] || ""),
+                flowCode: String(row.rowData["flowCode"] || ""),
+                refYear: Number(row.rowData["refYear"]),
+                refMonth: Number(row.rowData["refMonth"]),
+                isAggregate: Boolean(row.rowData["isAggregate"])
               }
             });
           }
@@ -437,48 +459,47 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Log some samples for debugging
     if (rowsToEmbed.length > 0) {
       console.log("Sample row embedding text:", rowsToEmbed[0].text);
       console.log("Sample row metadata:", rowsToEmbed[0].metadata);
     }
-
     if (cellsToEmbed.length > 0) {
       console.log("Sample cell embedding text:", cellsToEmbed[0].text);
       console.log("Sample cell metadata:", cellsToEmbed[0].metadata);
     }
 
-    // First generate and upsert row-level embeddings
+    const BATCH_SIZE = 100;
+
     if (rowsToEmbed.length > 0) {
       console.log(`Generating embeddings for ${rowsToEmbed.length} rows...`);
-      const rowEmbeddings = await embeddingService.generateEmbeddingsBatch(
-        rowsToEmbed.map((r) => r.text)
-      );
-      console.log(`Generated ${rowEmbeddings.length} row embeddings`);
-
-      const rowVectors: PineconeVector[] = rowsToEmbed
-        .map((row, index) => ({
-          id: `row_${row.metadata.rowId}`, // Prefix with 'row_' to distinguish
-          values: rowEmbeddings[index],
-          metadata: row.metadata
-        }))
-        .filter((v) => v.values && v.values.length > 0);
-
-      if (rowVectors.length > 0) {
+      for (let i = 0; i < rowsToEmbed.length; i += BATCH_SIZE) {
+        const batch = rowsToEmbed.slice(i, i + BATCH_SIZE);
         console.log(
-          `Upserting ${rowVectors.length} row vectors to Pinecone...`
+          `Processing row embedding batch ${i / BATCH_SIZE + 1}/${Math.ceil(
+            rowsToEmbed.length / BATCH_SIZE
+          )}`
         );
-        const result = await upsertEmbeddings(rowVectors);
-        console.log("Row embeddings upsert result:", result);
+        const embeddings = await embeddingService.generateEmbeddingsBatch(
+          batch.map((r) => r.text)
+        );
+        const vectors: PineconeVector[] = batch
+          .map((row, index) => ({
+            id: `row_${row.metadata.rowId}`,
+            values: embeddings[index],
+            metadata: row.metadata
+          }))
+          .filter((v) => v.values && v.values.length > 0);
+
+        if (vectors.length > 0) {
+          console.log(`Upserting batch of ${vectors.length} row vectors...`);
+          await upsertEmbeddings(vectors);
+        }
       }
+      console.log("Row embeddings upserted.");
     }
 
-    // Then generate and upsert cell-level embeddings
     if (cellsToEmbed.length > 0) {
       console.log(`Generating embeddings for ${cellsToEmbed.length} cells...`);
-
-      // Process in batches to avoid memory issues with large datasets
-      const BATCH_SIZE = 100;
       for (let i = 0; i < cellsToEmbed.length; i += BATCH_SIZE) {
         const batch = cellsToEmbed.slice(i, i + BATCH_SIZE);
         console.log(
@@ -486,33 +507,27 @@ export async function POST(request: NextRequest) {
             cellsToEmbed.length / BATCH_SIZE
           )}`
         );
-
-        const cellEmbeddings = await embeddingService.generateEmbeddingsBatch(
+        const embeddings = await embeddingService.generateEmbeddingsBatch(
           batch.map((c) => c.text)
         );
-
-        const cellVectors: PineconeVector[] = batch
+        const vectors: PineconeVector[] = batch
           .map((cell, index) => ({
             id: cell.metadata.blockId,
-            values: cellEmbeddings[index],
+            values: embeddings[index],
             metadata: cell.metadata
           }))
           .filter((v) => v.values && v.values.length > 0);
 
-        if (cellVectors.length > 0) {
-          console.log(
-            `Upserting batch of ${cellVectors.length} cell vectors to Pinecone...`
-          );
-          const result = await upsertEmbeddings(cellVectors);
-          console.log(`Batch ${i / BATCH_SIZE + 1} upsert result:`, result);
+        if (vectors.length > 0) {
+          console.log(`Upserting batch of ${vectors.length} cell vectors...`);
+          await upsertEmbeddings(vectors);
         }
       }
-
-      console.log("All cell embeddings upserted.");
+      console.log("Cell embeddings upserted.");
     }
 
     return NextResponse.json({
-      message: `Successfully created mock sheet ${sheetId} with ${numRows} rows and ${columnDefs.length} columns.`,
+      message: `Successfully created mock UN Comtrade sheet ${sheetId} with ${numRows} rows and ${columnDefs.length} columns.`,
       sheetId: sheetId,
       embeddingsCreated: {
         rows: rowsToEmbed.length,
@@ -520,7 +535,7 @@ export async function POST(request: NextRequest) {
       }
     });
   } catch (error: any) {
-    console.error("[MOCK_DATA_POST]", error);
+    console.error("[MOCK_DATA_POST_COMTRADE]", error);
     return new NextResponse(`Internal Server Error: ${error.message}`, {
       status: 500
     });

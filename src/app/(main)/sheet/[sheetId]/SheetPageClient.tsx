@@ -1,4 +1,3 @@
-// src/components/SheetPageClient.tsx
 "use client";
 
 import { useState, useCallback } from "react";
@@ -52,17 +51,7 @@ export function SheetPageClient({ sheetData, sheetId }: SheetPageClientProps) {
       </div>
 
       {/* Main content area with fixed height */}
-      <div className='flex-grow grid grid-cols-1 lg:grid-cols-3 gap-4 p-4 h-[calc(100vh-64px)] overflow-hidden'>
-        {/* Sheet Grid with fixed height */}
-        <div className='lg:col-span-2 h-full overflow-hidden flex flex-col'>
-          <SheetGrid
-            columns={columns}
-            rows={rows}
-            cells={cells}
-            highlightedCell={highlightedCell}
-          />
-        </div>
-
+      <div className='flex-grow grid grid-cols-1 lg:grid-cols-1 gap-4 p-4 h-[calc(100vh-64px)] overflow-hidden'>
         {/* QA Chat with fixed height */}
         <div className='lg:col-span-1 h-full overflow-hidden'>
           <QAChatInterface

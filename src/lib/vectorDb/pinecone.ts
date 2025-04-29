@@ -8,20 +8,29 @@ const pineconeIndex = pinecone.Index(process.env.PINECONE_INDEX_NAME || "");
 
 export interface PineconeMetadata {
   blockId: string;
-  rowId: string;
   sheetId: string;
   orgId: string;
-  contentSnippet: string; // Store a snippet for context
-  isRowLevel?: boolean; // Optional flag for row-level embeddings
-  columnName?: string; // Optional column name for filtering
-  columnIds?: string[]; // Single column ID instead of array
-  companyName?: string; // Optional company name for filtering
-  country?: string; // Optional country for filtering
-  fundingRound?: string; // Optional funding round for filtering
+  rowId: string;
+  contentSnippet?: string;
+  columnIds?: string[];
+  columnName?: string;
+
+  reporterISO?: string;
+  partnerISO?: string;
+  cmdCode?: string;
+  flowCode?: string;
+  refYear?: number;
+  refMonth?: number;
+  isAggregate?: boolean;
+  isRowLevel?: boolean;
+
+  companyName?: string;
+  country?: string;
+  fundingRound?: string;
 }
 
 export interface PineconeVector {
-  id: string; // Use blockId
+  id: string;
   values: number[];
   metadata: PineconeMetadata;
 }
@@ -29,7 +38,6 @@ export interface PineconeVector {
 export async function upsertEmbeddings(vectors: PineconeVector[]) {
   if (!vectors || vectors.length === 0) return;
   try {
-    // Batch upserts for efficiency
     const batchSize = 100;
     for (let i = 0; i < vectors.length; i += batchSize) {
       const batch = vectors.slice(i, i + batchSize);
@@ -44,50 +52,39 @@ export async function upsertEmbeddings(vectors: PineconeVector[]) {
 
 export async function queryEmbeddings(
   embedding: number[],
-  filter: Partial<PineconeMetadata> & { columnIds?: string[] }, // Allow columnIds for API compatibility
+  filter: Partial<PineconeMetadata> & { columnIds?: string[] },
   topK: number = 5
 ): Promise<PineconeVector[]> {
   try {
-    // Create a proper Pinecone filter
     const pineconeFilter: any = { ...filter };
 
-    // Handle the columnIds special case
     if (pineconeFilter.columnIds) {
-      // Instead of trying to match an array field, we'll use an $or condition
-      // with individual columnName matches
       if (pineconeFilter.columnIds.length > 0) {
         console.log(
           `Filtering for columns: ${pineconeFilter.columnIds.join(", ")}`
         );
 
-        // For debugging
         console.log("Original filter:", JSON.stringify(pineconeFilter));
 
-        // Option 1: If we stored columnName, we can filter by that
         pineconeFilter.$or = pineconeFilter.columnIds.map(
           (columnId: string) => ({
-            columnName: columnId // Using columnName that matches column ID names
+            columnName: columnId
           })
         );
 
-        // Option 2: If we're using isRowLevel flag, we can search all row-level embeddings
-        // which contain all columns (use only if option 1 doesn't work)
         pineconeFilter.$or = pineconeFilter.$or || [];
         pineconeFilter.$or.push({ isRowLevel: true });
 
-        // Remove the original columnIds
         delete pineconeFilter.columnIds;
 
         console.log("Modified filter:", JSON.stringify(pineconeFilter));
       } else {
-        // If empty column IDs, just remove it
         delete pineconeFilter.columnIds;
       }
     }
 
-    // If no filter conditions remain, provide a minimal filter
     if (Object.keys(pineconeFilter).length === 0) {
-      pineconeFilter.sheetId = filter.sheetId; // Always filter by sheet at minimum
+      pineconeFilter.sheetId = filter.sheetId;
     }
 
     console.log("Final Pinecone query filter:", JSON.stringify(pineconeFilter));
@@ -97,24 +94,22 @@ export async function queryEmbeddings(
       filter: pineconeFilter,
       topK: topK,
       includeMetadata: true,
-      includeValues: false // Usually don't need vectors back
+      includeValues: false
     });
 
     console.log(`Query returned ${queryResponse.matches?.length || 0} matches`);
 
     return (queryResponse.matches?.map((match) => ({
       id: match.id,
-      values: [], // Not requested
+      values: [],
       metadata: match.metadata as unknown as PineconeMetadata,
-      score: match.score // Include score for debugging
+      score: match.score
     })) || []) as any;
   } catch (error) {
     console.error("Error querying embeddings from Pinecone:", error);
 
-    // Provide a graceful fallback
     console.log("Attempting fallback query with minimal filter...");
     try {
-      // Try with just the sheet ID as filter
       const fallbackFilter = { sheetId: filter.sheetId };
       const fallbackResponse = await pineconeIndex.query({
         vector: embedding,
@@ -132,13 +127,13 @@ export async function queryEmbeddings(
 
       return (fallbackResponse.matches?.map((match) => ({
         id: match.id,
-        values: [], // Not requested
+        values: [],
         metadata: match.metadata as unknown as PineconeMetadata,
         score: match.score
       })) || []) as any;
     } catch (fallbackError) {
       console.error("Fallback query also failed:", fallbackError);
-      // Return empty result instead of throwing
+
       return [];
     }
   }
