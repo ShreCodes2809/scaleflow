@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { StreamingTextResponse } from "ai";
-import { MatrixQAService } from "@/lib/services/MatrixQAService";
+import { MatrixQAService } from "@/lib/services/QAService";
 import { MatrixQARequest } from "@/lib/types";
 
 export async function POST(request: NextRequest) {

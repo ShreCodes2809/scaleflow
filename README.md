@@ -12,8 +12,8 @@
 The system follows a modern web architecture leveraging Next.js for both frontend and backend API routes, Supabase for the primary data store, Pinecone for vector embeddings, OpenAI for LLM reasoning and embeddings, and LangChain with the Vercel AI SDK for streaming synthesis and UI integration.
 
 *   **Frontend (Browser UI):** Built with React and Next.js (`app` router). Uses Tailwind CSS for styling and the Vercel `ai/react` package (`useChat` hook) to handle streaming chat interactions. It displays the sheet data (`SheetGrid`), the chat interface (`QAChatInterface`), and handles citation clicks for highlighting (`SheetPageClient`).
-*   **Backend API (`/api/matrix-qa`):** A Next.js API route that serves as the entry point for Q&A requests. It orchestrates the process via the `MatrixQAService`.
-*   **Core Service (`MatrixQAService`):** The central orchestrator. It manages conversation state, performs schema analysis, invokes AI agents for reasoning and retrieval, sets up the LangChain streaming synthesis pipeline, and formats the final streaming response with metadata.
+*   **Backend API (`/api/qa`):** A Next.js API route that serves as the entry point for Q&A requests. It orchestrates the process via the `QAService`.
+*   **Core Service (`QAService`):** The central orchestrator. It manages conversation state, performs schema analysis, invokes AI agents for reasoning and retrieval, sets up the LangChain streaming synthesis pipeline, and formats the final streaming response with metadata.
 *   **AI Agents:**
     *   `ReasoningAgent`: Analyzes the user query, sheet schema, and conversation history to create a multi-step plan for data retrieval.
     *   `RetrievalAgent`: Executes the retrieval plan using semantic search (Pinecone), keyword search (Supabase), or specific ID lookups (Supabase) and consolidates the findings into structured `Evidence`.
@@ -31,8 +31,8 @@ The system follows a modern web architecture leveraging Next.js for both fronten
 ## End-to-End Data Flow (Streaming Q&A)
 
 1.  **User Input:** The user types a query into the `QAChatInterface` component.
-2.  **Frontend Request:** The `useChat` hook sends a POST request to `/api/matrix-qa` containing the current messages, `sheetId`, and `conversationId`.
-3.  **API Route Handling:** The `/api/matrix-qa` route receives the request and instantiates `MatrixQAService`. It calls `processStreamingQuery`.
+2.  **Frontend Request:** The `useChat` hook sends a POST request to `/api/qa` containing the current messages, `sheetId`, and `conversationId`.
+3.  **API Route Handling:** The `/api/qa` route receives the request and instantiates `MatrixQAService`. It calls `processStreamingQuery`.
 4.  **Orchestration (`MatrixQAService.processStreamingQuery`):**
     a.  **Conversation State:** Retrieves or initializes conversation state (including history and potentially cached schema) from the in-memory `conversationStore`.
     b.  **Schema Analysis:** If not cached, fetches columns and sample rows via `BlockService` -> Supabase. Infers column types and structure (`SchemaInfo`) and caches it.
@@ -63,7 +63,7 @@ The system follows a modern web architecture leveraging Next.js for both fronten
 
 ## API Design
 
-*   **Endpoint:** `/api/matrix-qa`
+*   **Endpoint:** `/api/qa`
 *   **Method:** `POST`
 *   **Request Body (`MatrixQARequest`):**
     ```json

@@ -42,7 +42,7 @@ export const QAChatInterface: React.FC<QAChatInterfaceProps> = ({
     reload,
     stop
   } = useChat({
-    api: "/api/matrix-qa",
+    api: "/api/qa",
     body: {
       sheetId,
       conversationId

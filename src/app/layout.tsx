@@ -6,18 +6,17 @@ import "./globals.css"; // Adjust path if needed
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Raycaster Matrix Agent",
-  description: "Agentic Q&A on tabular data",
+  title: "Scaleflow Agent"
 };
 
 export default function RootLayout({
-  children,
+  children
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   return (
     <ClerkProvider>
-      <html lang="en">
+      <html lang='en'>
         <body className={inter.className}>{children}</body>
       </html>
     </ClerkProvider>

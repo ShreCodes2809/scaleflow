@@ -22,7 +22,7 @@ export default async function HomePage() {
     <div className='min-h-screen bg-[#121212] text-gray-200'>
       <div className='container mx-auto p-6 sm:p-8'>
         <h1 className='text-3xl font-bold mb-8 text-center text-white'>
-          Starred Companies
+          Data Sheets
         </h1>
 
         {sheets.length === 0 ? (
