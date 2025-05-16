@@ -1,1 +1,1 @@
-This folder contains all the configuration files.
+This folder contains all the configuration files. The primary and secondary keys for the uncomtrade data can be acquired by signing up on the official comtrade developer portal ([Link](https://comtradedeveloper.un.org/signin?returnUrl=%2F)) and subscribe to one of the free APIs (documentation provided on the website).
