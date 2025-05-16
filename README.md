@@ -6,7 +6,7 @@
 
 ## 🗂️ Table of Contents
 
-* [Project Overview](#project-overview)
+* [Project Overview]([https://github.com/ShreCodes2809/scaleflow/tree/main?tab=readme-ov-file#-project-overview])
 * [Architecture Diagram](#architecture-diagram)
 * [Features](#features)
 * [Backend Overview](#backend-overview)
