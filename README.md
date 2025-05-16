@@ -192,7 +192,7 @@ We thoroughly tested ScaleFlow's performance across frontend AI integration and 
 * Four ingestion modes were tested: `super_light`, `light`, `slightly_heavy`, and `heavy`.
 * Key metrics included total execution time and memory usage per mode:
 
-![Stress Test - Execution Time vs Memory](./path/to/stress_execution_memory.png)
+![Stress Test - Execution Time vs Memory](https://github.com/ShreCodes2809/scaleflow/blob/main/results/exec_time_vs_mem.png)
 
 * Findings:
 
@@ -204,7 +204,7 @@ We thoroughly tested ScaleFlow's performance across frontend AI integration and 
 * Five types of queries tested: `avg_close_price`, `max_high_min_low`, `monthly_volume`, `total_volume`, and `volatility`.
 * Executed under four stress modes from `super_light` to `heavy`.
 
-![Aggregation Query Time](./path/to/aggregation_query_bar.png)
+![Aggregation Query Time](https://github.com/ShreCodes2809/scaleflow/blob/main/results/agg_query_exec_time_vs_sm.png)
 
 * Findings:
 
@@ -216,7 +216,8 @@ We thoroughly tested ScaleFlow's performance across frontend AI integration and 
 ### Chatbot Evaluation
 
 **Benchmark Metrics** (based on 10-query evaluation):
-![Chatbot Evaluation Metrics](./path/to/chatbot_eval_bar.png)
+
+![Chatbot Evaluation Metrics](https://github.com/ShreCodes2809/scaleflow/blob/main/results/chatbot_eval.png)
 
 * **Accuracy**: 90% of queries yielded factually correct responses.
 * **Citation Quality**: 100% of responses included verifiable, inline citations.
@@ -226,7 +227,7 @@ We thoroughly tested ScaleFlow's performance across frontend AI integration and 
 
 ### API Performance & Streaming Analysis
 
-![API Latency](./path/to/api_latency_streaming.png)
+![API Latency](https://github.com/ShreCodes2809/scaleflow/blob/main/results/api_strm_perf.png)
 
 * **Average First Token Latency**: \~400ms
 * **Peak Latency (under load)**: \~1100ms
