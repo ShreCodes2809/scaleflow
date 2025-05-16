@@ -6,18 +6,18 @@
 
 ## 🗂️ Table of Contents
 
-* [Project Overview]([https://github.com/ShreCodes2809/scaleflow/tree/main?tab=readme-ov-file#-project-overview])
-* [Architecture Diagram](#architecture-diagram)
-* [Features](#features)
-* [Backend Overview](#backend-overview)
-* [Frontend Overview](#frontend-overview)
-* [Data Sources](#data-sources)
-* [Evaluation Metrics](#evaluation-metrics)
-* [Deployment](#deployment)
-* [Setup Instructions](#setup-instructions)
-* [Folder Structure](#folder-structure)
-* [Future Work](#future-work)
-* [License](#license)
+* [Project Overview](#-project-overview)
+* [Architecture Diagram](#-architecture-diagram)
+* [Features](#-features)
+* [Backend Overview](#-backend-overview)
+* [Frontend Overview](#-frontend-overview)
+* [Data Sources](#-data-sources)
+* [Evaluation Metrics](#-evaluation-metrics)
+* [Deployment](#-deployment)
+* [Setup Instructions](#-setup-instructions)
+* [Folder Structure](#-folder-structure)
+* [Future Work](#-future-work)
+* [License](#-license)
 
 ---
 
