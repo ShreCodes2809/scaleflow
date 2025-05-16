@@ -1,0 +1,2 @@
+mode,ticker_limit,threads,tickers_saved,start_time,end_time,duration_seconds,memory_start_MB,memory_end_MB,memory_diff_MB
+super_light,250,5,177,2025-04-27T21:23:29.090436,2025-04-27T21:28:53.191248,324.1,193.11,299.15,106.04
