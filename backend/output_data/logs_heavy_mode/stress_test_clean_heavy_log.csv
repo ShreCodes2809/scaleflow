@@ -1,0 +1,2 @@
+stage,start_time,end_time,duration_seconds,memory_start_MB,memory_end_MB,memory_diff_MB
+clean,2025-04-28T12:05:03.118052,2025-04-28T12:13:46.763762,523.65,189.86,227.37,37.51

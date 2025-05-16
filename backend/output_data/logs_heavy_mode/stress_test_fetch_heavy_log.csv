@@ -1,0 +1,2 @@
+mode,ticker_limit,threads,tickers_saved,start_time,end_time,duration_seconds,memory_start_MB,memory_end_MB,memory_diff_MB
+heavy,6000,60,4308,2025-04-27T22:59:45.418678,2025-04-28T00:02:41.034246,3775.62,192.72,436.27,243.54
