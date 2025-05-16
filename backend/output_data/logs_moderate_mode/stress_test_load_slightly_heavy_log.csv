@@ -1,0 +1,2 @@
+stage,mode,table_name,rows_inserted,start_time,end_time,duration_seconds,memory_start_MB,memory_end_MB,memory_diff_MB
+load_to_postgres,slightly_heavy,stock_data_slightly_heavy,1212591,2025-04-27T22:55:22.851548,2025-04-27T22:56:30.416744,67.57,192.71,280.6,87.89

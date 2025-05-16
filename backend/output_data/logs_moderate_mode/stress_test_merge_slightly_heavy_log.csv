@@ -1,0 +1,2 @@
+stage,start_time,end_time,duration_seconds,memory_start_MB,memory_end_MB,memory_diff_MB
+merge,2025-04-27T22:49:08.916317,2025-04-27T22:52:11.973631,183.06,193.22,205.89,12.66
