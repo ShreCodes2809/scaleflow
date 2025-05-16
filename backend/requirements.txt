@@ -1,0 +1,24 @@
+pandas
+numpy
+requests
+python-dotenv       # For reading .env configuration files
+openpyxl            # For reading/writing Excel files
+pyarrow             # For Parquet file support
+xlsxwriter          # Optional Excel formatting
+beautifulsoup4      # HTML parsing (for web scraping/data cleanup)
+lxml                # XML/HTML parsing (required by pandas for some operations)
+urllib3
+httpx               # Alternative to requests (async support)
+xmltodict
+jsonschema
+scikit-learn
+xgboost
+joblib
+shap
+
+apache-airflow[postgres,gcp]
+tqdm                # Progress bars in loops
+loguru              # Cleaner logging
+yfinance
+sqlalchemy
+psutil
