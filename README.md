@@ -30,7 +30,7 @@ Supply chain disruptions—from natural disasters to macroeconomic shocks—pose
 
 ## Architecture Diagram
 
-![Architecture](https://raw.githubusercontent.com/jaymalave/raycaster-qna/refs/heads/main/public/arch.png)
+![Architecture](https://github.com/ShreCodes2809/scaleflow/blob/main/results/Scaleflow_Architecture_Diagram.png)
 
 ---
 
