@@ -1,6 +1,6 @@
 # ScaleFlow: AI-Powered Supply Chain Risk Prediction
 
-**ScaleFlow** is a full-stack, containerized platform that uses machine learning models, batch-processed data pipelines, and a real-time chatbot interface driven by artificial intelligence to forecast supply chain risks. It provides scalable insights from financial, trade, and macroeconomic datasets and is built with Apache Airflow, PostgreSQL, and Docker. It is also integrated with LangChain and GPT-4o. This repository showcases the project built for the **CSCI-6502: Big Data Analytics** course at the **University of Colorado Boulder**.
+**ScaleFlow** is a full-stack, containerized platform that uses machine learning models, batch-processed data pipelines, and a real-time chatbot interface driven by artificial intelligence to forecast supply chain risks. It provides scalable insights from financial, trade, and macroeconomic datasets and is built with Apache Airflow, PostgreSQL, and Docker. It is also integrated with LangChain and GPT-4o.
 
 ---
 
@@ -253,3 +253,6 @@ We thoroughly tested ScaleFlow's performance across frontend AI integration and 
 * Serverless global deployment (Cloud Run, Lambda)
 
 ---
+
+## **Acknowledgments**
+This repository showcases the project built for the **CSCI-6502: Big Data Analytics** course at the **University of Colorado Boulder**.
